@@ -1,0 +1,23 @@
+export(make.coef)
+export(coefCheck)
+export(make.Xterm)
+export(make.Fterm)
+export(make.variable)
+export(modelCheck)
+export(Data2LD)
+export(fun.explinear)
+export(fun.Dexplinear)
+export(modelList2Vec)
+export(modelVec2List)
+export(Btensorfn)
+export(BAtensorfn)
+export(Atensorfn)
+
+import(fda)
+import(Matrix)
+import(splines)
+import(R.cache)
+importFrom("graphics", "lines", "plot")
+
+
+
