@@ -97,7 +97,7 @@ inprod.TPbasis <- function(basis1,  basis2,  basis3,  basis4,
   bmat2  <- eval.basis(rng, basis2, Lfdobj2)
   bmat3  <- eval.basis(rng, basis3, Lfdobj3)
   bmat4  <- eval.basis(rng, basis4, Lfdobj4)
-  tensorprod <- InnerLoop(bmat1, bmat2, bmat3, bmat4, wtvec)
+  tensorprod <- loopJuan(bmat1, bmat2, bmat3, bmat4, wtvec)
   chs    <- width * t(tensorprod) / 2
   s[1,]  <- chs
   tnm    <- 0.5
@@ -118,7 +118,7 @@ inprod.TPbasis <- function(basis1,  basis2,  basis3,  basis4,
     bmat2  <- eval.basis(x, basis2, Lfdobj2)
     bmat3  <- eval.basis(x, basis3, Lfdobj3)
     bmat4  <- eval.basis(x, basis4, Lfdobj4)
-    tensorprod <- InnerLoop(bmat1, bmat2, bmat3, bmat4, wtvec)
+    tensorprod <- loopJuan (bmat1, bmat2, bmat3, bmat4, wtvec)
     # print(max(abs(tensorprod)))
     chs <- width * t(tensorprod) / tnm
     chsold <- s[iter - 1,]

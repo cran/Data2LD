@@ -3,9 +3,9 @@ Atensorfn <- function(modelList, coefList) {
   #  NFORCEI is the number of forcing terms for this variable.
   #  Each member of AtensorList[[ivar]] is a list of length NFORCEI
   #  and each member of this is a list of length NFORCEI
-  
-  #  Last modified 2 January 2018
-  
+
+  #  Last modified 22 May 2018
+
   nvar <- length(modelList)
   AtensorList <- vector("list", nvar)
   for (ivar in 1:nvar) {
@@ -64,12 +64,14 @@ Atensorfn <- function(modelList, coefList) {
               if (Atypev == "const"   && Atypex == "const" &&
                   Utypev == "bspline" && Utypex == "bspline") {
                 #  of both coefficients have constant bases, use inprod.Data2LD
+                # print("Calling inprod.Data2LD")
                 XWXWmatij <- inprod.Data2LD(Ubasisv, Ubasisx, 0, 0)
                 XWXWmatij <- matrix(XWXWmatij, nUbasisv*nUbasisx, 1)
               } else {
                 # otherwise use inprod.TPbasis
-                XWXWmatij <- inprod.TPbasis(Ubasisv, Abasisv, 
-                                            Ubasisx, Abasisx, 
+                # print("Calling inprod.TPbasis")
+                XWXWmatij <- inprod.TPbasis(Ubasisv, Abasisv,
+                                            Ubasisx, Abasisx,
                                             0, 0, 0, 0)
               }
               #  as a single column sparse matrix
@@ -83,9 +85,9 @@ Atensorfn <- function(modelList, coefList) {
       #  there are no forcing terms for this variable
       AtensorList[[ivar]] <- NULL
     }
-    
+
   }
-  
+
   return(AtensorList)
-  
+
 }

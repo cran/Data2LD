@@ -1,21 +1,21 @@
 BAtensorfn <- function(XbasisList, modelList, coefList) {
-  #  Set up BATENSORLIST of length NVAR defining products of   
+  #  Set up BATENSORLIST of length NVAR defining products of
   #  derivative terms and forcing terms in LX.
   #  Each list BATENSORLIST[[ivar]] contains a list array of dimensions
   #        NFORCE[j_1] and NDERIVVEC[l] + 1.
-  #  Each list BATENSORLIST[[ivar]][[j_1]][[l_2]] contains the inner product 
+  #  Each list BATENSORLIST[[ivar]][[j_1]][[l_2]] contains the inner product
   #  X basis functions for variable i_2,
-  #  variable weight basis functions for variable i_2, 
+  #  variable weight basis functions for variable i_2,
   #  basis functions for forcing function j_1 and variable i_1
   #  forcing weight basis for forcing function j_1 and variable i_1.
-  
-  #  Last modified 5 January 2018
-  
+
+  #  Last modified 22 May 2018
+
   rng     <- XbasisList[[1]]$rangeval
   Wbasism <- create.constant.basis(rng)
-  
+
   #  set up the structure of BAtensorList
-  
+
   nvar <- length(modelList)
   BAtensorList <- vector("list", nvar)
   for (ivar in 1:nvar) {
@@ -60,12 +60,12 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
             XWXWmatij <- matrix(t(XWXWmatij), nXbasisi*nUbasisj, 1)
           } else {
             #  otherwise use inprod.TPbasis
-            XWXWmatij <- inprod.TPbasis(Xbasisi, Wbasism, Ubasisj, Abasisj, 
+            XWXWmatij <- inprod.TPbasis(Xbasisi, Wbasism, Ubasisj, Abasisj,
                                         order, 0, 0, 0)
           }
           #  store vector as a sparse one-column matrix
-          BAtensorList[[ivar]][[nX]][[jforce]] <- Matrix(XWXWmatij) 
-          #  store inner products of right side derivatives of X bases and 
+          BAtensorList[[ivar]][[nX]][[jforce]] <- Matrix(XWXWmatij)
+          #  store inner products of right side derivatives of X bases and
           #  forcing functions
           for (iw in 1:nallXterm) {
             modelListiw <- modelListi$XList[[iw]]
@@ -94,8 +94,8 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
                 XWXWmatwj <- matrix(t(XWXWmatwj), nXbasisw*nUbasisj, 1)
               } else {
                 #  otherwise use inprod.TPbasis
-                XWXWmatwj  <- inprod.TPbasis(Xbasisw, Wbasisw, 
-                                             Ubasisj, Abasisj, 
+                XWXWmatwj  <- inprod.TPbasis(Xbasisw, Wbasisw,
+                                             Ubasisj, Abasisj,
                                              derivative, 0, 0, 0)
               }
               #  store vector as a sparse one-column matrix
@@ -106,7 +106,7 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
       }
     }
   }
-  
+
   return(BAtensorList)
-  
+
 }

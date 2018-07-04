@@ -1,9 +1,6 @@
 #  set up the 194 by 3 matrix of refinery data from a .txt file
 
 N <- 194
-
-#  Set up the variables and plot their data
-
 TimeData <- RefineryData[,1]
 TrayData <- RefineryData[,2]
 ValvData <- RefineryData[,3]
@@ -20,6 +17,7 @@ Valvbreaks <- c(0,67,193)
 Valvnbasis <- 2
 Valvnorder <- 1
 Valvbasis  <- create.bspline.basis(c(0,193), Valvnbasis, Valvnorder, Valvbreaks)
+
 par(mfrow=c(2,1))
 plot(Valvbasis, xlab="Time", ylab="B-spline basis functions")
 #  smooth the valve data
@@ -33,9 +31,12 @@ plotfit.fd(ValvData, TimeData, Valvfd, xlab="Time", ylab="Valve setting")
 conbasis <- create.constant.basis(c(0,193))
 #  Make the two coefficient function lists and
 #  store these in a coefficient function list
+#  Use positive random initial values for testing purposes
 TrayCoefList <- vector("list",2)
-TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="alpha")
+TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=exp(rnorm(1)), 
+                               estimate=TRUE)
+TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=exp(rnorm(1)), 
+                               estimate=TRUE)
 
 #  Run a check on the coefficient List array, 
 #  which also counts the number of estimated parameters
@@ -48,13 +49,13 @@ TrayNtheta     <- TraycoefResult$ntheta
 
 #  Define single homogeneous term
 
-XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
+XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1, name="reaction")
 XList <- vector("list", 1)
 XList[[1]] <- XTerm
 
 #  Define the single forcing term
 
-FTerm <- make.Fterm(ncoef=2, Ufd=Valvfd)
+FTerm <- make.Fterm(ncoef=2, Ufd=Valvfd, name="Valve")
 FList <- vector("list", 1)
 FList[[1]] <- FTerm
 
@@ -73,9 +74,9 @@ TrayModelList <- modelCheck(TrayModelList, TrayCoefList)
 
 #  Define the List array containing the tray data
 
-TrayData <- list(argvals=RefineryData[,1], y=RefineryData[,2])
+TrayList <- list(argvals=RefineryData[,1], y=RefineryData[,2])
 TrayDataList  <- vector("list",1)
-TrayDataList[[1]] <- TrayData
+TrayDataList[[1]] <- TrayList
 
 # construct the basis object for tray variable
 #  Order 5 spline basis with four knots at the 67
@@ -86,7 +87,9 @@ Traynorder <- 5
 Traybreaks <- c(0, rep(67,3), seq(67, 193, len=15))
 Traynbasis <- 22
 TrayBasis  <- create.bspline.basis(c(0,193), Traynbasis, Traynorder, Traybreaks)
+
 #  plot the basis
+
 par(mfrow=c(1,1))
 plot(TrayBasis, xlab="Time", ylab="B-spline basis functions")
 
@@ -95,8 +98,6 @@ plot(TrayBasis, xlab="Time", ylab="B-spline basis functions")
 TrayBasisList    <- vector("list",1)
 TrayBasisList[[1]] <- TrayBasis
 
-#  Set smoothing constant rho to a value specifying light smoothing
-rhoVec <- 0.5 
 #  Evaluate the fit to the data given the initial parameter estimates (0 and 0)
 #  This also initializes the four-way tensors so that they are not re-computed
 #  for subsquent analyses.
@@ -124,7 +125,7 @@ TrayCoefList.opt <- TrayCoefList
 for (irho in 1:nrho) {
   rhoi <- rhoVec[irho]
   print(paste("rho <- ",round(rhoi,5)))
-  Data2LDResult <- Data2LD.Opt(TrayDataList, TrayBasisList, TrayModelList, TrayCoefList.opt, 
+  Data2LDResult <- Data2LD.opt(TrayDataList, TrayBasisList, TrayModelList, TrayCoefList.opt, 
                                rhoi, convrg, iterlim, dbglev)
   theta.opti <- Data2LDResult$thetastore
   TrayCoefList.opti <- modelVec2List(theta.opti, TrayCoefList)
@@ -164,17 +165,17 @@ print(paste("MSE = ", round(MSE,5)))
 print(paste("df  = ", round(df,1)))
 print(paste("gcv = ", round(gcv,5)))
 
-TrayfdParList <- Data2LDList$TrayfdParList
-Trayfd   <- TrayfdParList[[1]]$fd
-Trayfine <- eval.fd(tfine, Trayfd)
-Ufine    <- eval.fd(tfine, Ufd)
+Trayfd        <- Data2LDList$XfdParList[[1]]$fd
+tfine         <- seq(0,193,len=101)
+Trayfine      <- eval.fd(tfine, Trayfd)
+Ufine         <- eval.fd(tfine, Valvfd)
 
 # plot fit of solution to data
 
+par(mfrow=c(1,1))
 plot(tfine, Trayfine, type="l", lwd=2, 
      xlab="Time", ylab="Tray level", xlim=c(0,193), ylim=c(-0.5,4.5))
 points(TimeData, TrayData)
-legend("x(t)", "Data")
 
 # compute the derivative Dx(t) and the right side of the equation
 
@@ -201,6 +202,3 @@ print(round(c(theta[2], thetaDN[2], thetaUP[2], stderr[2]),4))
 par(mfrow=c(2,1))
 plot(rhoVec, thesave[,1], type <- "b", lwd=2, xlab="rho", ylab="rate parameter")
 plot(rhoVec, thesave[,2], type <- "b", lwd=2, xlab="rho", ylab="forcing parameter")
-
-
-

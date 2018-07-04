@@ -5,6 +5,7 @@ export(make.Fterm)
 export(make.variable)
 export(modelCheck)
 export(Data2LD)
+export(Data2LD.opt)
 export(fun.explinear)
 export(fun.Dexplinear)
 export(modelList2Vec)
@@ -17,7 +18,10 @@ import(fda)
 import(Matrix)
 import(splines)
 import(R.cache)
+import(deSolve)
 importFrom("graphics", "lines", "plot")
+
+useDynLib(Data2LD)
 
 
 

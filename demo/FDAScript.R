@@ -20,8 +20,8 @@ nAknots   <- nAbasis + 1
 Aknots    <- seq(fdarange[1],fdarange[2],len=nAknots)
 Abasisobj <- create.bspline.basis(fdarange,nAbasis,nAorder,Aknots)
 #  Define the two coefficient  functions in this model
-coef1 <- make.coef(conbasis,  0.04,                TRUE,   "beta")
-coef2 <- make.coef(Abasisobj, matrix(1,nAbasis,1), TRUE,   "alpha")
+coef1 <- make.coef(conbasis,  0.04,                TRUE)
+coef2 <- make.coef(Abasisobj, matrix(1,nAbasis,1), TRUE)
 # List array containing the coefficient lists
 coefList <- vector("list",2)
 coefList[[1]] <- coef1
@@ -60,6 +60,7 @@ norder   <-  6 #  order 6 for a smooth 2nd deriv.
 fdabasis <- create.bspline.basis(fdarange, nXbasis, norder)
 XbasisList = vector("list",1)
 XbasisList[[1]] <- fdabasis
+AtensorList = Atensorfn(fdaXList, coefList)
 #  Single evaluation in order to set up the 4-way tensors
 rhoVec <- 0.5
 Data2LDResult <- Data2LD(yListX, XbasisList, fdaXList, coefList, rhoVec)
@@ -92,7 +93,7 @@ coefList.optX <- coefList
 for (irho in 1:nrho) {
   rhoi <- rhoVec[irho]
   print(paste("rho <- ",round(rhoi,5)))
-  Data2LD.optResult <- Data2LD.Opt(yListX, XbasisList, fdaXList, coefList.optX, 
+  Data2LD.optResult <- Data2LD.opt(yListX, XbasisList, fdaXList, coefList.optX, 
                                    rhoi, convrg, iterlim, dbglev)
   theta.opti    <- Data2LD.optResult$thetastore
   coefList.opti <- modelVec2List(theta.opti, coefList.optX)
@@ -117,7 +118,7 @@ coefList.optY <- coefList
 for (irho in 1:nrho) {
   rhoi <- rhoVec[irho]
   print(paste("rho <- ",round(rhoi,5)))
-  Data2LD.optResult <- Data2LD.Opt(yListY, XbasisList, fdaXList, coefList.optY, 
+  Data2LD.optResult <- Data2LD.opt(yListY, XbasisList, fdaXList, coefList.optY, 
                                    rhoi, convrg, iterlim, dbglev)
   theta.opti    <- Data2LD.optResult$thetastore
   coefList.opti <- modelVec2List(theta.opti, coefList.optY)

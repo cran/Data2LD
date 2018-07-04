@@ -1,31 +1,32 @@
 Btensorfn <- function(XbasisList, modelList, coefList) {
-  #  Set up BTENSORList defining homogeneous part of LX  
+  #  Set up BTENSORList defining homogeneous part of LX
   #  This is a List array of length NVAR
-  #    Each List BTENSORList[[i1]] contains a square List array of order 
+  #    Each List BTENSORList[[i1]] contains a square List array of order
   #      NALLXTERM+1.
   #      Each List BTENSORList[[i1}[[j1]][[j2]] contains the tensor product
-  #      of the coefficient basis functions for basis i in term j1, 
+  #      of the coefficient basis functions for basis i in term j1,
   #         the derivative order j of the X basis functions in term j1,
   #         the derivative order j of the X basis functions in term j2,
   #         the coefficient basis functions for basis i in term j2,
   #         j1, j2 <- 1,...,NALLXTERM+1 where
   #         j1, j2 <- NALLXTERM+1 is for the mth derivative of the X basis
   #         functions.
-  
-  #  Last modified 2 January 2018
-  
+
+  #  Last modified 22 May 2018
+
+  # print("Btensorfn")
   rng     <- XbasisList[[1]]$rangeval
   Wbasism <- create.constant.basis(rng)
   Wfdm    <- fd(1,Wbasism)
   WfdParm <- fdPar(Wfdm, 0, 0, FALSE)
-  
+
   #  set up the structure of BtensorList
-  
+
   nvar <- length(modelList)
   BtensorList <- vector("list", nvar)
   for (ivar in 1:nvar) {
     modelListi <- modelList[[ivar]]
-    #  set up a two-dimensiional list object within each member of BtensorList
+    #  set up a two-dimensional list object within each member of BtensorList
     nX <- modelListi$nallXterm+1
     BtensorListi <- vector("list",nX)
     for (jx in 1:nX) {
@@ -34,7 +35,7 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
     BtensorList[[ivar]] <- BtensorListi
     #  loop through derivative orders from 1 to nderiv
     nderiv <- nX
-    for (iw in 1:nderiv) {        
+    for (iw in 1:nderiv) {
       if (iw < nderiv) {
         modelListiw <- modelListi$XList[[iw]]
         ncoefw      <- modelListiw$ncoef
@@ -87,14 +88,14 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
             Wtypex   <- Wbasisx$type
             Xtypex   <- Xbasisx$type
             nXbasisx <- Xbasisx$nbasis
-            if (Wtypew == "const"   && Wtypex == "const"   && 
+            if (Wtypew == "const"   && Wtypex == "const"   &&
                 Xtypew == "bspline" && Xtypex == "bspline" ) {
               # if both coefficients have constant bases, evaluate using inprod.Data2LD
               XWXWmatij <- inprod.Data2LD(Xbasisw, Xbasisx, jw, jx)
               XWXWmatij <- matrix(XWXWmatij, nXbasisw*nXbasisx, 1)
             } else {
-              # otherwise evaluate using inprod.TPbasis  
-              XWXWmatij <- inprod.TPbasis(Xbasisw, Wbasisw, Xbasisx, Wbasisx, 
+            #   # otherwise evaluate using inprod.TPbasis
+              XWXWmatij <- inprod.TPbasis(Xbasisw, Wbasisw, Xbasisx, Wbasisx,
                                           jx, 0, jw, 0)
             }
             #  save as a single column sparse matrix
@@ -104,7 +105,7 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
       }
     }
   }
-  
-  return(BtensorList) 
-    
+
+  return(BtensorList)
+
 }

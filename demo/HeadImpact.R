@@ -1,8 +1,8 @@
 #  Analyses of headimpact impact data
 #  The second order linear forced differential equation is:
 #  D2x(t) <- -beta0 x(t) - beta1 Dx(t) + alpha u(t)
-HeadImpactTime <- HeadImpact[,2]  #  time in milliseconds
-HeadImpact     <- HeadImpact[,3]  #  acceleration in millimeters/millisecond^2
+HeadImpactTime <- HeadImpactData[,2]  #  time in milliseconds
+HeadImpact     <- HeadImpactData[,3]  #  acceleration in millimeters/millisecond^2
 HeadImpactRng  <- c(0,60) # Define range time for estimated model
 # plot the data along with a unit pulse
 plot(HeadImpactTime, HeadImpact, type="p", xlim=c(0,60),  ylim=c(-1.0,1.5),
@@ -14,9 +14,9 @@ lines(c(14,15), c(1,1), lty=2)
 # Set up the constant basis
 conbasis <- create.constant.basis(HeadImpactRng)
 # Define the three constant coefficient functions
-coef1 <- make.coef(fun=conbasis, parvec=0.073, estimate=TRUE, coeftype="beta")
-coef2 <- make.coef(fun=conbasis, parvec=0.01,  estimate=TRUE, coeftype="beta")
-coef3 <- make.coef(fun=conbasis, parvec=0.25,  estimate=TRUE, coeftype="alpha")
+coef1 <- make.coef(fun=conbasis, parvec=0.073, estimate=TRUE)
+coef2 <- make.coef(fun=conbasis, parvec=0.01,  estimate=TRUE)
+coef3 <- make.coef(fun=conbasis, parvec=0.25,  estimate=TRUE)
 #  Set up the coefficient list
 coefList  <- vector("list",3)
 coefList[[1]] <- coef1
@@ -105,7 +105,7 @@ for (irho in 1:nrho) {
     rhoi <- rhoVec[irho]
     print(paste(" ------------------  rhoVeci <- ", round(rhoi,4), 
                 " ------------------"))
-    Data2LDResult <- Data2LD.Opt(yList, XbasisList, HeadImpactList, coefList.opt, 
+    Data2LDResult <- Data2LD.opt(yList, XbasisList, HeadImpactList, coefList.opt, 
                                  rhoi, convrg, iterlim, dbglev)
     theta.opti     <- Data2LDResult$theta
     coefList.opti  <- modelVec2List(theta.opti, coefList)
@@ -224,5 +224,73 @@ for (i in index) {
          main=paste("RMSE <- ",round(RMSEsave[i],3)))
          lines(HeadImpactTime, yhat, col=2)
 }
+#
+#  Example 2:  The head impact data
+#
+#  This is a second order model forced by a single pulse function
+#  All coefficients are positive
+HeadImpactTime <- HeadImpactData[,2]  #  time in milliseconds
+HeadImpact     <- HeadImpactData[,3]  #  time in milliseconds
+HeadImpactRng  <- c(0,60) # Define range time for estimated model
+# Set up the constant basis
+conbasis <- create.constant.basis(HeadImpactRng)
+# Define the three constant coefficient functions
+coef1 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
+coef2 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
+coef3 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="alpha")
+#  Set up the coefficient list
+coefList  <- vector("list",3)
+coefList[[1]] <- coef1
+coefList[[2]] <- coef2
+coefList[[3]] <- coef3
+#  check coefficient list
+coefCheckList <- coefCheck(coefList)
+coefList      <- coefCheckList$coefList
+ntheta        <- coefCheckList$ntheta
+print(paste("ntheta = ",ntheta))
+# Define the two terms in the homogeneous part of the equation
+Xterm0 <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
+Xterm1 <- make.Xterm(variable=1, derivative=1, ncoef=2, factor=-1)
+# Set up the XList vector of length two
+XList <- vector("list",2)
+XList[[1]] <- Xterm0
+XList[[2]] <- Xterm1
+# Define a unit pulse function located at times 14-15
+Pulsebasis <- create.bspline.basis(HeadImpactRng, 3, 1, c(0,14,15,60))
+Pulsefd    <- fd(matrix(c(0,1,0),3,1),Pulsebasis)
+# Define the forcing term
+Fterm      <- make.Fterm(ncoef=3, Ufd=Pulsefd, factor=1)
+# Set up the forcing term list of length one
+FList      <- vector("list",1) 
+FList[[1]] <- Fterm
+#  Define the single differential equation in the model
+HeadImpactVariable <- make.variable(order=2, XList=XList, FList=FList)
+#  Define list of length one containing the equation definition
+HeadImpactList=vector("list",1)
+HeadImpactList[[1]] <- HeadImpactVariable
+#  check the object for internal consistency
+HeadImpactList <- modelCheck(HeadImpactList, coefList)
+#  Define the List array containing the data
+yList1 <- list(argvals=HeadImpactTime, y=HeadImpact)
+yList <- vector("list",1)
+yList[[1]] <- yList1
+#  Construct basis for output x(t), multiple knots at times 14 and 15
+#  Order 6 spline basis, with three knots at the impact point and 
+#  three knots at impact + delta to permit discontinuous first 
+#  derivatives at these points
+knots     <- c(0,14,14,14,15,15,seq(15,60,len=11))
+norder    <- 6
+nbasis    <- 21
+HeadImpactBasis <- create.bspline.basis(HeadImpactRng,nbasis,norder,knots)
+#  set up basis list
+XbasisList <- vector("list",1)
+XbasisList[[1]] <- HeadImpactBasis
+# An evaluation of the criterion at the initial values
+rhoVec <- 0.5  #  light smoothing
+#  This command causes Data2LD to set up and save the tensors
+Data2LDResult <- Data2LD(yList, XbasisList, HeadImpactList, coefList, rhoVec)
+MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
+DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
+
 
 

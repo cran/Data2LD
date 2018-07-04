@@ -46,14 +46,11 @@ AbasisobjF <- create.constant.basis(dayrange)
 #  the homogeneous term.  
 linfun <- list(fd=fun.explinear, Dfd=fun.Dexplinear, more=Wbasisobj)
 #  Define the coefficient
-coefListW  <-list(fun=linfun, parvec=matrix(0,nWbasis,1), 
-                  estimate=TRUE, coeftype="beta")
+coefListW  <-list(fun=linfun, parvec=matrix(0,nWbasis,1), estimate=TRUE)
 #  Coefficient for constant forcing
-coefListA1 <- make.coef(fun=AbasisobjC, parvec=1,
-                        estimate=TRUE, coeftype="alpha")
+coefListA1 <- make.coef(fun=AbasisobjC, parvec=1, estimate=TRUE)
 #  Coeffcient for cosine forcing
-coefListA2 <- make.coef(fun=AbasisobjF, parvec=1, 
-                        estimate=TRUE, coeftype="alpha")
+coefListA2 <- make.coef(fun=AbasisobjF, parvec=1, estimate=TRUE)
 #  coefList constructed
 coefList <- vector("list",3)
 coefList[[1]] <- coefListW
@@ -125,7 +122,7 @@ coefList.opt <- coefList
 for (  irho  in  1 : nrho ) {
   rhoVeci <- rhoVec[irho]
   print(paste('Rho = ',round(rhoVeci,5)))
-  OptList <- Data2LD.Opt(yList, XbasisList, AvTempList, coefList.opt, 
+  OptList <- Data2LD.opt(yList, XbasisList, AvTempList, coefList.opt, 
                          rhoVeci, convrg, iterlim, dbglev)
   theta.opti <- OptList$thetastore
   coefList.opti <- modelVec2List(theta.opti, coefList)    
@@ -145,7 +142,7 @@ irho <- nrho
 theta <- thesave[irho,]
 coefList <- modelVec2List(theta, coefList)
 rhoi <- rhoVec[irho]
-Data2LDList <- Data2LD(yList, XbasisList, modelList, coefList.opti, rhoi)
+Data2LDList <- Data2LD(yList, XbasisList, AvTempList, coefList.opti, rhoi)
 MSE       <- Data2LDList$MSE 
 df        <- Data2LDList$df
 gcv       <- Data2LDList$gcv 
@@ -161,6 +158,7 @@ tempfd    <- tempfdPar$fd
 tfine     <- seq(0,365,len=101)
 tempfine  <- eval.fd(tfine, tempfd)
 #  Plot the fit to the data
+par(mfrow=c(1,1),ask=FALSE)
 plot(tfine, tempfine, type="l", lwd=2, xlim=c(0,365), ylim=c(-15,25),
      xlab="Time (days)", ylab="Temperature (deg C)")
 points(daytime73, tempav73[,station], pch="o") 
@@ -195,6 +193,3 @@ print('    alpha.1   lower CI upper CI')
 print(c(alpha1, alpha1-2*alpha1.stderr, alpha1+2*alpha1.stderr))
 print('    alpha.2   lower CI upper CI')
 print(c(alpha2, alpha2-2*alpha2.stderr, alpha2+2*alpha2.stderr))
-
-
-

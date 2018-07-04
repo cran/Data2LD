@@ -1,4 +1,4 @@
-coefCheck <- function(coefList) {
+coefCheck <- function(coefList, report=TRUE) {
   #  COEFCHECK checks the list of coefficient functions defining a
   #  possibly forced linear system of llinear differential equations.
   #
@@ -12,8 +12,6 @@ coefCheck <- function(coefList) {
   #  Name       Class
   #  parvec     real vector
   #  estimate   numeric, and converted to logical
-  #  coeftype   string,  {'alpha', 'beta', 'force', 'homo', 'homog',
-  #                       'homogeneous'}
   #  fun        basis, fd, fdPar, list
   #  If this test is not passed, the checking terminates.
   #
@@ -30,7 +28,11 @@ coefCheck <- function(coefList) {
   #  more       any object
   #  
   
-  #  Last modified 2 January 2018
+  #  the following comment lines are deprecated:
+  #  coeftype   string,  {'alpha', 'beta', 'force', 'homo', 'homog',
+  #                       'homogeneous'}
+  
+  #  Last modified 26 June 2018
   
   #  -------------------------------  Step 1  -------------------------------
   
@@ -120,30 +122,30 @@ coefCheck <- function(coefList) {
       }
     }
     
-    #  check that all list objects contain a member named "coeftype"
-    
-    if (is.null(coefListi$coeftype)) {
-      warning(paste("Listuct object for member ", icoef,
-                    " does not have a coeftype field."))
-      errwrd <- TRUE
-    } else {
-      coeftype <- coefListi$coeftype
-      if (!is.character(coeftype)) {
-        warning(paste("coeftype for member ", icoef,
-                      " is not a string."))
-        errwrd <- TRUE
-      }
-      if (!(coeftype == "beta"        ||
-            coeftype == "homo"        ||
-            coeftype == "homogeneous" ||
-            coeftype == "alpha"       ||
-            coeftype == "force"       ||
-            coeftype == "forcing")) {
-        warning(paste("Field coeftype for member ", icoef, " is not one of: ",
-                      "alpha, beta, homo, homogeneous, force, forcing."))
-        errwrd <- TRUE
-      }
-    }
+    # #  check that all list objects contain a member named "coeftype"
+    # 
+    # if (is.null(coefListi$coeftype)) {
+    #   warning(paste("Listuct object for member ", icoef,
+    #                 " does not have a coeftype field."))
+    #   errwrd <- TRUE
+    # } else {
+    #   coeftype <- coefListi$coeftype
+    #   if (!is.character(coeftype)) {
+    #     warning(paste("coeftype for member ", icoef,
+    #                   " is not a string."))
+    #     errwrd <- TRUE
+    #   }
+    #   if (!(coeftype == "beta"        ||
+    #         coeftype == "homo"        ||
+    #         coeftype == "homogeneous" ||
+    #         coeftype == "alpha"       ||
+    #         coeftype == "force"       ||
+    #         coeftype == "forcing")) {
+    #     warning(paste("Field coeftype for member ", icoef, " is not one of: ",
+    #                   "alpha, beta, homo, homogeneous, force, forcing."))
+    #     errwrd <- TRUE
+    #   }
+    # }
     
     #  check that all struct objects contain a field named "fun"
     
@@ -174,10 +176,7 @@ coefCheck <- function(coefList) {
   m2 <- 0
   for (icoef in 1:ncoef) {
     coefListi <- coefList[[icoef]]
-    if (coefListi$estimate &&
-        (coefListi$coeftype == "beta"        ||
-         coefListi$coeftype == "homo"        ||
-         coefListi$coeftype == "homogeneous")) {
+    if (coefListi$estimate) {
       parveci <- coefListi$parvec
       npari <- length(parveci)
       m1 <- m2 + 1
@@ -189,21 +188,22 @@ coefCheck <- function(coefList) {
     }
   }
   
-  for (icoef in 1:ncoef) {
-    coefListi <- coefList[[icoef]]
-    if (coefListi$estimate &&
-        (coefListi$coeftype == "alpha"        ||
-         coefListi$coeftype == "force"        ||
-         coefListi$coeftype == "forcing")) {
-      nbasisi <- length(coefListi$parvec)
-      m1 <- m2 + 1
-      m2 <- m2 + nbasisi
-      coefListi$index <- m1:m2
-      ntheta <- ntheta + nbasisi
-      theta  <- c(theta, parveci)
-      coefListNew[[icoef]] <- coefListi
-    }
-  }
+  # The following lines are deprecated:
+  # for (icoef in 1:ncoef) {
+  #   coefListi <- coefList[[icoef]]
+  #   if (coefListi$estimate &&
+  #       (coefListi$coeftype == "alpha"        ||
+  #        coefListi$coeftype == "force"        ||
+  #        coefListi$coeftype == "forcing")) {
+  #     nbasisi <- length(coefListi$parvec)
+  #     m1 <- m2 + 1
+  #     m2 <- m2 + nbasisi
+  #     coefListi$index <- m1:m2
+  #     ntheta <- ntheta + nbasisi
+  #     theta  <- c(theta, parveci)
+  #     coefListNew[[icoef]] <- coefListi
+  #   }
+  # }
   
   #  -------------------------------  Step 4  -------------------------------
   
@@ -244,6 +244,40 @@ coefCheck <- function(coefList) {
     stop("Errors found, cannot continue.")
   }
   
+  #  -------------------------------  Step 5  -------------------------------
+  
+  if (report) {
+    for (icoef in 1:ncoef) {
+      coefListi <- coefList[[icoef]]
+      cat("-------------------------------------------\n")
+      cat("Coefficient ",icoef,"\n")
+      if (is.fd(coefListi$fun)) {
+        cat("    Type is a functional data object.\n")
+      } else {
+        cat("    Type is a user-defined function.\n")
+      }
+      npar = length(coefListi$parvec)
+      if (npar < 6) {
+        cat("    Parameter value(s): ", coefListi$parvec, "\n")
+      } else {
+        cat("    Parameter value(s):\n")
+        cat(coefListi$parvec)
+        cat("\n")
+      }
+      if (coefListi$estimate) {
+        cat("    Parameter value(s) to be estimated.\n")
+      } else {
+        cat("    Parameter value(s) are fixed.\n")
+      }
+      # cat("    Coefficient type is ",coefListi$coeftype,".\n")
+    }
+    cat("-------------------------------------------\n")
+  }
+      
+  for (icoef in 1:ncoef) {
+    coefListi <- coefList[[icoef]]
+  }
+    
   return(list(coefList=coefListNew, theta=theta, ntheta=ntheta))
   
 }

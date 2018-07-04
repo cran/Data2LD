@@ -1,4 +1,4 @@
-make.Xterm <- function(variable, ncoef, derivative=0, factor=1) {
+make.Xterm <- function(variable, ncoef, derivative=0, factor=1, name=NULL) {
   if (floor(variable) != variable || variable < 1) {
     stop("Argument VARIABLE is not a positive integer.")
   }
@@ -8,6 +8,7 @@ make.Xterm <- function(variable, ncoef, derivative=0, factor=1) {
   if (floor(derivative) != derivative || derivative < 0) {
     stop("Argument DERIVATIVE is not a positive integer.")
   }
-  termList <- list(variable=variable, ncoef=ncoef, derivative=derivative, factor=factor)
+  termList <- list(variable=variable, ncoef=ncoef, derivative=derivative, 
+                   factor=factor, name=name)
   return(termList)
 }

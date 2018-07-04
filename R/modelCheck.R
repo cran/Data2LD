@@ -1,4 +1,4 @@
-modelCheck <- function(modelList, coefList) {
+modelCheck <- function(modelList, coefList, report=TRUE) {
   # Check the modelList structure, requiring at a minimum:
   #   listarray with a member for each variable, containing:
   #     a list array of length equal number of homogeneous terms present.  
@@ -11,7 +11,7 @@ modelCheck <- function(modelList, coefList) {
   #       fd object for forcing function(s)
   #       fdPar object for coefficient function
   
-  #  Last modified 2 January 2018
+  #  Last modified 27 June 2018
   
   #  number of coefficients and number of variables
   
@@ -49,8 +49,7 @@ modelCheck <- function(modelList, coefList) {
   
   for (ivar in 1:nvar) {
     modelListi <- modelList[[ivar]]
-    #  check modelList[[ivar]] for required fields, and assign default if needed
-    #  check member "XList"
+    #  check modelList[[ivar]] order, name and weight members, and assign default if needed
     #  check member "order"
     if (is.null(modelListi$order)) {
       #  assign default value
@@ -361,6 +360,46 @@ modelCheck <- function(modelList, coefList) {
     
   modelListnew <- modelList
     
+  #  --------------------------------------------------------------------------
+  #  If report is TRUE, print out a summary of the model
+  #  --------------------------------------------------------------------------
+
+  if (report) {
+    for (ivar in 1:nvar) {
+      modelListi <- modelList[[ivar]]
+      cat("Model Summary\n")
+      cat("---------------------------\n")
+      cat("Variable",ivar,",",modelListi$name,
+          "with derivative order",modelListi$order,
+          "and weight",modelListi$weight,"\n")
+      XList = modelListi$XList
+      if (!is.null(XList)) {
+        cat("Homogeneous term(s) in the equation:\n")
+        nXList = length(XList)
+        for (j in 1:nXList) {
+          XListj = XList[[j]]
+          cat("    Term",j,XListj$name,"\n")
+          cat("    has coefficient number",XListj$ncoef,
+                  "and constant factor",XListj$factor,".\n")
+          cat("    They multiply variable",XListj$variable,
+                  "with derivative order",XListj$derivative,".\n")
+        }
+      }
+      FList = modelListi$FList
+      if (!is.null(FList)) {
+        cat("Forcing term(s) in the equation:\n")
+        nFList = length(FList)
+        for (j in 1:nFList) {
+          FListj = FList[[j]]
+          cat("    Term",j,FListj$name,"\n")
+          cat("    has coefficient number",FListj$ncoef,
+                   "and constant factor",FListj$factor,".\n")
+        }
+      }
+    }
+    cat("---------------------------\n")
+  }
+  
   return(modelListnew)
     
 }

@@ -1,7 +1,7 @@
 fun.explinear <- function(tvec, bvec, Bbasisobj) {
   bvec   <- as.matrix(bvec)
-  if (!is.numeric(t))  {
-    stop("In fun.explinear argument T is not numeric.")
+  if (!is.numeric(tvec))  {
+    stop("In fun.explinear argument TVEC is not numeric.")
   }
   if (!is.numeric(bvec))  {
     stop("In fun.explinear argument BVEC is not numeric.")

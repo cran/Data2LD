@@ -170,8 +170,8 @@ conbasis <- create.constant.basis(TimeRng)
 #  store these in a coefficient function list
 TrayCoefList <- vector("list",2)
 # Both coefficients are estimated and both have initial value 0.
-TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="alpha")
+TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Run a check on the coefficient List array, 
 #  which also counts the number of estimated parameters
 TraycoefResult <- coefCheck(TrayCoefList)
@@ -201,7 +201,7 @@ TrayVariable <- make.variable(name="Tray level", order=1, XList=XList, FList=FLi
 TrayList=vector("list",1)
 TrayList[[1]] <- TrayVariable
 #  check the object for internal consistency
-TrayList <- modelCheck(TrayList, TrayCoefList)
+TrayModelList <- modelCheck(TrayList, TrayCoefList)
 #  Define the List array containing the tray data
 Tray.yList <- list(argvals=RefineryData[,"Time"], 
                    y      =RefineryData[,"Tray.level"])
@@ -223,7 +223,7 @@ rhoVec <- 0.5
 #  Evaluate the fit to the data given the initial parameter estimates (0 and 0)
 #  This also initializes the four-way tensors so that they are not re-computed
 #  for subsquent analyses.
-#Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayList, TrayCoefList, rhoVec)
+Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, TrayCoefList, rhoVec)
 #MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
 #DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
 #
@@ -237,9 +237,9 @@ HeadImpactRng  <- c(0,60) # Define range time for estimated model
 # Set up the constant basis
 conbasis <- create.constant.basis(HeadImpactRng)
 # Define the three constant coefficient functions
-coef1 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-coef2 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-coef3 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="alpha")
+coef1 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef2 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef3 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Set up the coefficient list
 coefList  <- vector("list",3)
 coefList[[1]] <- coef1

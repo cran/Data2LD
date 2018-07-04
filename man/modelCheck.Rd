@@ -16,14 +16,15 @@
   this list.
 }
 \usage{
-modelCheck(modelList, coefList)
+modelCheck(modelList, coefList, report=TRUE)
 }
 \arguments{
   \item{modelList}{A list object containing the specification of a Data2LD model. 
   Each member of this list contains a list object that defines a single linear 
   differential equation.}
   \item{coefList}{A list object containing the specifications of one or more 
-  coefficient functions.}                                      
+  coefficient functions.} 
+  \item{report}{If TRUE, display a report on the structure of the dynamic system.}
 }
 \details{
   A model list object containing variable specifications can be made manually, 

@@ -20,11 +20,12 @@
   using this list.
 }
 \usage{
-  coefCheck(coefList)
+  coefCheck(coefList, report=TRUE)
 }
 \arguments{
   \item{coefList}{A list object containing the specifications of one or more coefficient 
   functions.}                                      
+  \item{report}{If TRUE, display a report on the structures of the coefficient functions.}
 }
 \details{
   A coefficient specification can be made manually, or can set up in a by a single 

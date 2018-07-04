@@ -49,14 +49,14 @@ make.variable(name = "", order = 1, XList = NULL, FList = NULL)
 #  Set up the observation times and range 
 TimeData <- RefineryData[,"Time"]
 TimeRng  <- range(TimeData)
-# Defne a constant basis object
+# DefIne a constant basis object
 conbasis <- create.constant.basis(TimeRng)
 #  Define the two coefficient functions and
 #  store these in a coefficient function list
 TrayCoefList <- vector("list",2)
 # Both coefficients are estimated and both have initial value 0.
-TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="alpha")
+TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Run a check on the coefficient List array, 
 #  which also counts the number of estimated parameters
 TraycoefResult <- coefCheck(TrayCoefList)
@@ -65,7 +65,7 @@ TrayNtheta     <- TraycoefResult$ntheta
 print(paste("ntheta = ",TrayNtheta))
 #  Define single homogeneous term with order zero derivative, 
 #  constant multiplier -1, and defined by the first coeffcient
-XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
+XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1, name="reaction")
 XList <- vector("list", 1)
 XList[[1]] <- XTerm
 #  Define the step forcing function for the valve setting
@@ -77,7 +77,7 @@ ValveBasis  <- create.bspline.basis(TimeRng, Valvenbasis, Valvenorder, Valvebrea
 ValveData <- RefineryData[,"Valve.setting"]
 Valvefd   <- smooth.basis(TimeData, ValveData, ValveBasis)$fd
 #  Define the FList object for the single forcing function
-FTerm <- make.Fterm(ncoef=2, Ufd=Valvefd)
+FTerm <- make.Fterm(ncoef=2, Ufd=Valvefd, name="Valve")
 FList <- vector("list", 1)
 FList[[1]] <- FTerm
 #  Define the single differential equation in the first order model
@@ -97,9 +97,9 @@ HeadImpactRng  <- c(0,60) # Define range time for estimated model
 # Set up the constant basis
 conbasis <- create.constant.basis(HeadImpactRng)
 # Define the three constant coefficient functions
-coef1 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-coef2 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="beta")
-coef3 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE, coeftype="alpha")
+coef1 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef2 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef3 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Set up the coefficient list
 coefList  <- vector("list",3)
 coefList[[1]] <- coef1
@@ -111,8 +111,8 @@ coefList      <- coefCheckList$coefList
 ntheta        <- coefCheckList$ntheta
 print(paste("ntheta = ",ntheta))
 # Define the two terms in the homogeneous part of the equation
-Xterm0 <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
-Xterm1 <- make.Xterm(variable=1, derivative=1, ncoef=2, factor=-1)
+Xterm0 <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1, name="stiffness")
+Xterm1 <- make.Xterm(variable=1, derivative=1, ncoef=2, factor=-1, name="viscosity")
 # Set up the XList vector of length two
 XList <- vector("list",2)
 XList[[1]] <- Xterm0
@@ -121,7 +121,7 @@ XList[[2]] <- Xterm1
 Pulsebasis <- create.bspline.basis(HeadImpactRng, 3, 1, c(0,14,15,60))
 Pulsefd    <- fd(matrix(c(0,1,0),3,1),Pulsebasis)
 # Define the forcing term
-Fterm      <- make.Fterm(ncoef=3, Ufd=Pulsefd, factor=1)
+Fterm      <- make.Fterm(ncoef=3, Ufd=Pulsefd, factor=1, name="pulse")
 # Set up the forcing term list of length one
 FList      <- vector("list",1) 
 FList[[1]] <- Fterm
@@ -154,8 +154,8 @@ nAknots   <- nAbasis + 1
 Aknots    <- seq(fdarange[1],fdarange[2],len=nAknots)
 Abasisobj <- create.bspline.basis(fdarange,nAbasis,nAorder,Aknots)
 #  Define the two coefficient  functions in this model
-coef1 <- make.coef(conbasis,  0.04,                TRUE,   "beta")
-coef2 <- make.coef(Abasisobj, matrix(1,nAbasis,1), TRUE,   "alpha")
+coef1 <- make.coef(conbasis,  0.04,                TRUE)
+coef2 <- make.coef(Abasisobj, matrix(1,nAbasis,1), TRUE)
 # List array containing the coefficient lists
 coefList <- vector("list",2)
 coefList[[1]] <- coef1
@@ -166,12 +166,13 @@ coefList   <- coefResult$coefList
 ntheta     <- coefResult$ntheta
 print(paste("ntheta = ",ntheta)) 
 #  Set up single homogeneous term in D^2x = -beta x 
-Xterm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
+Xterm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1, 
+                    name="reaction speed")
 XList <- vector("list",1)
 XList[[1]] <- Xterm
 #  Set up coefficient for forcing term \alpha(t)*1
 confd <- fd(1,conbasis)
-Fterm <- make.Fterm(ncoef=2, Ufd=confd, factor=1)
+Fterm <- make.Fterm(ncoef=2, Ufd=confd, factor=1, name="steps")
 FList <- vector("list", 1)
 FList[[1]] <- Fterm
 #  make variable for X coefficient of script
@@ -236,13 +237,11 @@ AbasisobjF <- create.constant.basis(dayrange)
 linfun <- list(fd=fun.explinear, Dfd=fun.Dexplinear, more=Wbasisobj)
 #  Define the coefficient
 coefListW  <-list(fun=linfun, parvec=matrix(0,nWbasis,1), 
-                  estimate=TRUE, coeftype="beta")
+                  estimate=TRUE)
 #  Coefficient for constant forcing
-coefListA1 <- make.coef(fun=AbasisobjC, parvec=1,
-                        estimate=TRUE, coeftype="alpha")
+coefListA1 <- make.coef(fun=AbasisobjC, parvec=1, estimate=TRUE)
 #  Coeffcient for cosine forcing
-coefListA2 <- make.coef(fun=AbasisobjF, parvec=1, 
-                   estimate=TRUE, coeftype="alpha")
+coefListA2 <- make.coef(fun=AbasisobjF, parvec=1, estimate=TRUE)
 #  coefList constructed
 coefList <- vector("list",3)
 coefList[[1]] <- coefListW
@@ -254,12 +253,13 @@ coefList <- coefResult$coefList
 ntheta   <- coefResult$ntheta
 print(paste("ntheta = ",ntheta))
 #  define homogeneous term and list container
-Xterm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
+Xterm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1,
+                    name="reaction speed")
 XList <- vector("list", 1)
 XList[[1]] <- Xterm
 #  define two forcing terms
-Fterm1 <- make.Fterm(Ufd=Uconfd, ncoef=2, factor=1)
-Fterm2 <- make.Fterm(Ufd=Ucosfd, ncoef=3, factor=1)
+Fterm1 <- make.Fterm(Ufd=Uconfd, ncoef=2, factor=1, name="constant")
+Fterm2 <- make.Fterm(Ufd=Ucosfd, ncoef=3, factor=1, name="cosine")
 #  forcing term container
 FList <- vector("list", 2)
 FList[[1]] <- Fterm1

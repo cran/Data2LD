@@ -12,7 +12,7 @@
   that specifies the structure of a single coefficient function.
 }
 \usage{
-make.coef(funobj, parvec, estimate=TRUE, coeftype="beta")
+make.coef(funobj, parvec, estimate=TRUE)
 }
 \arguments{
   \item{funobj}{This is the definition coefficient function.  This may be specified 
@@ -24,9 +24,6 @@ make.coef(funobj, parvec, estimate=TRUE, coeftype="beta")
   function defined by argument \code{funobj.}}
   \item{estimate}{A logical value indicating whether the parameters are to be 
   estimated (TRUE) or regarded as fixed (FALSE).}
-  \item{coeftype}{Whether the coefficient multiplies a variable in the system ("beta")
-  or multiplies a forcing term ("alpha").  This information is not used in this 
-  release of the package, but may be needed in subsequent releases.}
 }
 \details{
   This function checks that all supplied conform to what is required.  In the case 

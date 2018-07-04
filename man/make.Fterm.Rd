@@ -14,7 +14,7 @@
   This function sets up a list object that specifies the structure of a single term.
 }
 \usage{
-make.Fterm(ncoef, Ufd, factor=1)
+make.Fterm(ncoef, Ufd, factor=1, name=NULL)
 }
 \arguments{
   \item{ncoef}{An integer specifying the position of the coefficient specification 
@@ -24,7 +24,8 @@ make.Fterm(ncoef, Ufd, factor=1)
   See function \code{make.coef} for more details.}
   \item{factor}{A real number that is treated as fixed. For example, it is frequently 
   the case that a variable will appear in two or more places in a system of equations, 
-  and sometimes multipled by -1.}                                      
+  and sometimes multipled by -1.}   
+  \item{name}{A name for the term, or for the forcing function itself.}
 }
 \details{
   This function checks that all supplied terms conform to what is required.
