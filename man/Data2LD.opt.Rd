@@ -11,8 +11,8 @@
 }  
 \usage{
 Data2LD.opt(yList, XbasisList, modelList, coefList, rhoMat, 
-            convcrit = 1e-6, iterlim = 20, dbglev = 1, 
-            parMap = diag(rep(1,npar)), wtvec = rep(1,nvar))
+            convcrit = 1e-4, iterlim = 20, dbglev = 1, 
+            active, parMap = diag(rep(1,npar)))
 }
 \arguments{
   \item{yList}{A list of length NVAR.  Each list contains in turn a struct object with                fields:
@@ -27,16 +27,24 @@ Data2LD.opt(yList, XbasisList, modelList, coefList, rhoMat,
    a functional data object or a functional basis object.}
   \item{modelList}{A list each member of which specifies one of linear differential 
   equations in the system.  These can be    
-   constructed using function \code{make.variable}.  See the help file for that 
+   constructed using function \code{make.Variable}.  See the help file for that 
    function for further details.}
   \item{coefList}{A list each member of which specifies one of the coefficients that 
   multiply one or more terms in the system. These can be constructed using function 
-  \code{make.coef}.  
+  \code{make.Coef}.  
   See the help file for that function for further details.}
-  \item{rhoMat}{A real number in the half-open interval \eqn{[0,T)]}.  Its value 
-  determines the relative emphasis on fitting the data versus being a solution of 
-  the differential equation.  The smaller the value, the more the emphasis on data 
-  fitting.}
+  \item{rhoMat}{A matrix with the number of rows equal to the number of values of the 
+  smoothing parameter per variable to be used in the optimization, and number of columns
+  equal to the number of variables.  
+  Each entry in the matrix is a value rho in the interval [0,1)  
+  so that 0 <= rho < 1.  
+  For each variable ivar in the system of equations and each optimization
+  iopt, the data are weighted by rho(iopt,ivar) and the
+  roughness penalty by 1-rho(iopt,ivar).
+  It is expected that the values of rho within each column will be 
+  in ascending order, and the estimated parameters for each row
+  are passed along as initial values to be used for the optimization
+  defined by the values of rho in the next row.}
   \item{convcrit}{A one- or two-part convergence criterion.  The first part is 
   for testing the convergence of the criterion values, and the second part, if 
   present in a vector of length 2, is for testing the norm of the gradient.}
@@ -46,13 +54,16 @@ Data2LD.opt(yList, XbasisList, modelList, coefList, rhoMat,
   If 2, the stepsize, slope and criterion at each step in the line search.
   if 3, displays, in addition to 2, a plot of the criterion values and slope after each 
   line search followed by a pause.}
+  \item{active}{The indices of the parameters that are to be estimated. If there are 
+  parameters not in this set of indices, these will be held fixed even though their
+  specification in \code{coefList} specifies that they are to be estimated.}
   \item{parMap}{A rectangular matrix with number of rows equal to the
   number of parameters to be estimated, and number of columns equal to the number of 
   parameters less the number of linear constraints on the estimated parameters.  
-  The columns of PARMAP must be orthnormal so that the crossproduct is an identity 
-  matrix. The crossproduct of \code{t(PARMAP)} and \code{THETA} maps unconstrained 
+  The columns of \code{parMap} must be orthnormal so that the crossproduct is an identity 
+  matrix. The crossproduct of \code{t(parMap)} and \code{THETA} maps unconstrained 
   parameters and the corresponding gradient into  constrained parameter space.
-  \code{PARMAP} will usually be set up using the full QR decomposition of a linear 
+  \code{parMap} will usually be set up using the full QR decomposition of a linear 
   constraint coefficient matrix \code{t(A)} where the constraints are of the form 
   A P = B, A and B being known matrices.  An example of such a constraint
   that arises often is one where two estimated coefficients are constrained to be equal.  
@@ -60,9 +71,6 @@ Data2LD.opt(yList, XbasisList, modelList, coefList, rhoMat,
   is a fixed set point or defined target level for variable X, then this would be set 
   up as a.1 x + a.2 x.0, where coefficients a.1 and a.2 are constrained to be equal in
   magnitude but opposite in sign, or a.1 + a.2 = 0. }
-  \item{wtvec}{A vector of length \emph{d} containing positive weighting values for 
-  variable weighting of the contributions of equations to the fitting criterion and 
-  its gradient.}
 }                                      
 \value{A named list object containing these results of the analysis:
     \item{theta.opt:}{A vector containing the optimal parameter values.}
@@ -90,8 +98,8 @@ conbasis <- create.constant.basis(TimeRng)
 #  store these in a coefficient function list
 TrayCoefList <- vector("list",2)
 # Both coefficients are estimated and both have initial value 0.
-TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
-TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+TrayCoefList[[1]] <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
+TrayCoefList[[2]] <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Run a check on the coefficient List array, 
 #  which also counts the number of estimated parameters
 TraycoefResult <- coefCheck(TrayCoefList)
@@ -116,17 +124,10 @@ FTerm <- make.Fterm(ncoef=2, Ufd=Valvefd)
 FList <- vector("list", 1)
 FList[[1]] <- FTerm
 #  Define the single differential equation in the first order model
-TrayVariable <- make.variable(name="Tray level", order=1, XList=XList, FList=FList)
+TrayVariable <- make.Variable(name="Tray level", order=1, XList=XList, FList=FList)
 #  check the object for internal consistency
-TrayList=vector("list",1)
-TrayList[[1]] <- TrayVariable
-#  check the object for internal consistency
-TrayModelList <- modelCheck(TrayList, TrayCoefList)
-#  Define the List array containing the tray data
-Tray.yList <- list(argvals=RefineryData[,"Time"], 
-                   y      =RefineryData[,"Tray.level"])
-TrayDataList  <- vector("list",1)
-TrayDataList[[1]] <- Tray.yList
+TrayVariableList=vector("list",1)
+TrayVariableList[[1]] <- TrayVariable
 # Construct the basis object for tray variable
 #  Order 5 spline basis with four knots at the 67
 #   to allow discontinuity in the first derivative
@@ -138,6 +139,13 @@ TrayBasis  <- create.bspline.basis(c(0,193), Traynbasis, Traynorder, Traybreaks)
 #  Set up the basis list for the tray variable
 TrayBasisList    <- vector("list",1)
 TrayBasisList[[1]] <- TrayBasis
+#  check the object for internal consistency and make modelList
+TrayModelList <- make.Model(TrayBasisList,TrayVariableList, TrayCoefList)
+#  Define the List array containing the tray data
+Tray.yList <- list(argvals=RefineryData[,"Time"], 
+                   y      =RefineryData[,"Tray.level"])
+TrayDataList  <- vector("list",1)
+TrayDataList[[1]] <- Tray.yList
 #  Set smoothing constant rho to a value specifying light smoothing
 rhoVec <- 0.5 
 #  Evaluate the fit to the data given the initial parameter estimates (0 and 0)
@@ -146,31 +154,24 @@ rhoVec <- 0.5
 Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, TrayCoefList, rhoVec)
 MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
 DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
-#  The use of Data2LD.opt requires setting up one of the example codes for 
-#  function make.variable, setting up value to variable rho within [0,1) 
-#  (0.5 is a typical choice), invoking function Data2LD in order to compute the 
-#  four-way tensors required for fast computation, and then setting up code like 
-#  this from the RefineryDemo.R code in the demo folder.  
-#  This code calls Data2LD.opt repeatedly over an increasing sequence of values of rho,
-#  feeding in the estimates of parameters from the previous values.
 #  These parameters control the optimization.
 dbglev   <-  1    #  debugging level
 iterlim  <- 50    #  maximum number of iterations
 convrg   <- c(1e-8, 1e-4)  #  convergence criterion
 #  This sets up an increasing sequence of rho values
 gammavec <- 0:7
-rhoMat   <- exp(gammavec)/(1+exp(gammavec))
-nrho    <- length(rhoMat)
-dfesave <- matrix(0,nrho,1)
-gcvsave <- matrix(0,nrho,1)
-MSEsave <- matrix(0,nrho,1)
-thesave <- matrix(0,nrho,TrayNtheta)
+rhoMat   <- as.matrix(exp(gammavec)/(1+exp(gammavec)),length(gammavec),1)
+nrho     <- length(rhoMat)
+dfesave  <- matrix(0,nrho,1)
+gcvsave  <- matrix(0,nrho,1)
+MSEsave  <- matrix(0,nrho,1)
+thesave  <- matrix(0,nrho,TrayNtheta)
 #  This initializes the list object containing coefficient estimates
 TrayCoefList.opt <- TrayCoefList
 # Loop through values of rho.  
 # for test purposes, only the first value rho = 0.5 is used here
 for (irho in 1:1) {
-  rhoi <- rhoMat[irho]
+  rhoi <- rhoMat[irho,]
   print(paste("rho <- ",round(rhoi,5)))
   Data2LDResult <- 
     Data2LD.opt(TrayDataList, TrayBasisList, TrayModelList, TrayCoefList.opt, 
@@ -185,8 +186,8 @@ for (irho in 1:1) {
   ISE       <- Data2LDList$ISE 
   Var.theta <- Data2LDList$Var.theta
   thesave[irho,] <- theta.opti
-  dfesave[irho]   <- df
-  gcvsave[irho]   <- gcv
-  MSEsave[irho]   <- MSE
+  dfesave[irho]  <- df
+  gcvsave[irho]  <- gcv
+  MSEsave[irho]  <- MSE
 }
 }

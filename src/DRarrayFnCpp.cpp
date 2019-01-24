@@ -2,8 +2,8 @@
 #include <Rinternals.h>
 
 extern "C" {
-  SEXP DRarrayFnC(SEXP nXbasisw, SEXP nWbasisw, SEXP nXbasisx, SEXP nWbasisx, 
-                  SEXP BVECX,    SEXP BTENS)
+  SEXP DRarrayFnCpp(SEXP nXbasisw, SEXP nWbasisw, SEXP nXbasisx, SEXP nWbasisx, 
+                    SEXP BVECX,    SEXP BTENS)
   {
     int nDRarray;
     SEXP DRarray;

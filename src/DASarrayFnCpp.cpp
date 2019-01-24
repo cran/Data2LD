@@ -2,8 +2,8 @@
 #include <Rinternals.h>
 
 extern "C" {
-  SEXP DASarrayFnC(SEXP nXbasisw, SEXP nWbasisw, SEXP nUbasisj, SEXP nAbasisj, 
-                   SEXP nrep,     SEXP BVECW,    SEXP UCOEFJ,   SEXP BATENS)
+  SEXP DASarrayFnCpp(SEXP nXbasisw, SEXP nWbasisw, SEXP nUbasisj, SEXP nAbasisj, 
+                     SEXP nrep,     SEXP BVECW,    SEXP UCOEFJ,   SEXP BATENS)
   {
     int nDASarray;
     SEXP DASarray;
@@ -38,7 +38,7 @@ extern "C" {
               int ijkl = i*nAj*nUj*nWw + j*nAj*nUj + k*nAj + l;
               
               /*  increment value at index by the product */
-              rDASarray[i+r*nXw+l*nXw*nRp] +=
+              rDASarray[i + r*nXw + l*nXw*nRp] +=
               Bvecw[j] * Ucoefj[k+r*nUj] * BAtens[ijkl];
             }
           }

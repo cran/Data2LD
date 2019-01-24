@@ -2,21 +2,21 @@
 #include <Rinternals.h>
 
 extern "C" {
-  SEXP RmatFnC(SEXP nXbasisw, SEXP nWbasisw, SEXP nXbasisx, SEXP nWbasisx,
-               SEXP BVECW,    SEXP BVECX,    SEXP BTENS) 
+  SEXP RmatFnCpp(SEXP nXbasisw, SEXP nWbasisw, SEXP nXbasisx, SEXP nWbasisx,
+                 SEXP BVECW,    SEXP BVECX,    SEXP BTENS) 
   {
     int nRmat;
     SEXP Rmat;
-    int nXw = *INTEGER(nXbasisw);
-    int nWw = *INTEGER(nWbasisw);
-    int nXx = *INTEGER(nXbasisx);
-    int nWx = *INTEGER(nWbasisx);
+    int     nXw   = *INTEGER(nXbasisw);
+    int     nWw   = *INTEGER(nWbasisw);
+    int     nXx   = *INTEGER(nXbasisx);
+    int     nWx   = *INTEGER(nWbasisx);
     double* Bvecw = REAL(BVECW);
     double* Bvecx = REAL(BVECX);
     double* Btens = REAL(BTENS);
     double* rRmat;
     nRmat = nXw*nXx;
-    Rmat = PROTECT(allocVector(REALSXP, nRmat));
+    Rmat  = PROTECT(allocVector(REALSXP, nRmat));
     rRmat = REAL(Rmat);
     /* assign 0 to all positions */
     for (int p = 0; p < nRmat; p++) rRmat[p] = 0;

@@ -1,4 +1,4 @@
-make.variable <- function(name="", order=1, XList=NULL, FList=NULL) {
+make.Variable <- function(name="", order=1, XList=NULL, FList=NULL) {
   if (floor(order) != order || order < 1) {
     stop("Argument ORDER is not a positive integer.")
   }

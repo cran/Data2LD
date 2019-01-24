@@ -9,7 +9,7 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
   #  basis functions for forcing function j_1 and variable i_1
   #  forcing weight basis for forcing function j_1 and variable i_1.
 
-  #  Last modified 22 May 2018
+  #  Last modified 17 January 2019
 
   rng     <- XbasisList[[1]]$rangeval
   Wbasism <- create.constant.basis(rng)
@@ -55,9 +55,12 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
           nUbasisj  <- Ubasisj$nbasis
           if (Atypej == "const" && Utypej == "bspline" && Xtypei == "bspline") {
             #  both coeffcients are constants, use inprod.Data2LD
-            XWXWmatij <- inprod.Data2LD(Xbasisi, Ubasisj, order, 0)
+            XWXWmatij <- inprodnow(Xbasisi, Ubasisj, order, 0)
+            # print("XWXWmatij:")
+            # print(round(XWXWmatij,5))
             #  store matrix by rows as a vector
             XWXWmatij <- matrix(t(XWXWmatij), nXbasisi*nUbasisj, 1)
+            # print(round(XWXWmatij,5))
           } else {
             #  otherwise use inprod.TPbasis
             XWXWmatij <- inprod.TPbasis(Xbasisi, Wbasism, Ubasisj, Abasisj,
@@ -90,18 +93,23 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
               if (Wtypew == "const"   && Atypej == "const" &&
                   Xtypew == "bspline" && Utypej == "bspline") {
                 #  both coeffcients are constants, use inprod.Data2LD
-                XWXWmatwj <- inprod.Data2LD(Xbasisw, Ubasisj, derivative, 0)
+                XWXWmatwj <- inprodnow(Xbasisw, Ubasisj, derivative, 0)
+                # print("XWXWmatwj:")
+                # print(round(XWXWmatwj,5))
                 XWXWmatwj <- matrix(t(XWXWmatwj), nXbasisw*nUbasisj, 1)
+                # print(round(XWXWmatwj,5))
               } else {
-                #  otherwise use inprod.TPbasis
                 XWXWmatwj  <- inprod.TPbasis(Xbasisw, Wbasisw,
                                              Ubasisj, Abasisj,
                                              derivative, 0, 0, 0)
               }
-              #  store vector as a sparse one-column matrix
-              BAtensorList[[ivar]][[iw]][[jforce]] <- Matrix(XWXWmatwj)
+              BAtensorList[[ivar]][[iw]][[jforce]] <- XWXWmatwj
+            } else {
+              BAtensorList[[ivar]][[iw]][[jforce]] <- NULL
             }
           }
+        } else {
+          BAtensorList[[ivar]][[nX]][[jforce]] <- NULL
         }
       }
     }

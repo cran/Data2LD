@@ -1,5 +1,5 @@
-\name{modelCheck}
-\alias{modelCheck}
+\name{make.Model}
+\alias{make.Model}
 \title{
   Check linear differential equation specifications.
 }
@@ -16,10 +16,12 @@
   this list.
 }
 \usage{
-modelCheck(modelList, coefList, report=TRUE)
+make.Model(XbasisList, variableList, coefList, report=TRUE)
 }
 \arguments{
-  \item{modelList}{A list object containing the specification of a Data2LD model. 
+  \item{XbasisList}{A list object containing the functional basis objects for 
+  representing the variables as functional data objects.}
+  \item{variableList}{A list object containing the specification of a Data2LD model. 
   Each member of this list contains a list object that defines a single linear 
   differential equation.}
   \item{coefList}{A list object containing the specifications of one or more 
@@ -38,8 +40,8 @@ modelCheck(modelList, coefList, report=TRUE)
   involve a derivative of a variable in the system multiplied by a coefficient function.  
   Member \code{nallFterm} is the number of forcing terms in the equation.  
   These two new members are essential for function \code{Data2LD}, and,
-  although \code{modelCheck} is also invoked inside \code{Data2LD} therefore a use of 
-  \code{modelCheck} is essential prior to using this function.
+  although \code{make.Model} is also invoked inside \code{Data2LD} therefore a use of 
+  \code{make.Model} is essential prior to using this function.
 }
 \value{
   A named list object with the same structure as the argument along with added 
@@ -49,11 +51,11 @@ modelCheck(modelList, coefList, report=TRUE)
     J. O. Ramsay and G. Hooker (2017) \emph{Dynamic Data Analysis}. Springer.
 }
 \seealso{
-  \code{\link{make.coef}},
-  \code{\link{make.Xterm}},
-  \code{\link{make.Fterm}},
-  \code{\link{make.variable}},
   \code{\link{coefCheck}},
+  \code{\link{make.Coef}},
+  \code{\link{make.Fterm}},
+  \code{\link{make.Variable}},
+  \code{\link{make.Xterm}},
 }
 \examples{
 #  For examples of the use of this function, 

@@ -2,7 +2,7 @@
 #include <Rinternals.h>
 
 extern "C" { 
-  SEXP loopJuanC(SEXP BVEC1, SEXP BVEC2, SEXP BVEC3, SEXP BVEC4, SEXP WVEC)
+  SEXP loopJuanCpp(SEXP BVEC1, SEXP BVEC2, SEXP BVEC3, SEXP BVEC4, SEXP WVEC)
   {
     int nBtensor;
     SEXP Btensor;

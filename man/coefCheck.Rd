@@ -48,11 +48,11 @@
     J. O. Ramsay and G. Hooker (2017) \emph{Dynamic Data Analysis}. Springer.
 }
 \seealso{
-  \code{\link{make.coef}},
+  \code{\link{make.Coef}},
   \code{\link{make.Xterm}},
   \code{\link{make.Fterm}},
-  \code{\link{make.variable}},
-  \code{\link{modelCheck}}
+  \code{\link{make.Variable}},
+  \code{\link{make.Model}}
 }
 \examples{
 #  For examples of the use of this function, 

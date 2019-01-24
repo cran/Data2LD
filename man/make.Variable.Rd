@@ -1,5 +1,5 @@
-\name{make.variable}
-\alias{make.variable}
+\name{make.Variable}
+\alias{make.Variable}
 \title{
   Check a list of linear differential equation specifications.
 }
@@ -12,7 +12,7 @@
   a list object that specifies the structure of a single coefficient function.
 }
 \usage{
-make.variable(name = "", order = 1, XList = NULL, FList = NULL)
+make.Variable(name = "", order = 1, XList = NULL, FList = NULL)
 }
 \arguments{
   \item{name}{A string to be used as a name for the equation or variable.  
@@ -55,8 +55,8 @@ conbasis <- create.constant.basis(TimeRng)
 #  store these in a coefficient function list
 TrayCoefList <- vector("list",2)
 # Both coefficients are estimated and both have initial value 0.
-TrayCoefList[[1]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
-TrayCoefList[[2]] <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+TrayCoefList[[1]] <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
+TrayCoefList[[2]] <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Run a check on the coefficient List array, 
 #  which also counts the number of estimated parameters
 TraycoefResult <- coefCheck(TrayCoefList)
@@ -81,12 +81,22 @@ FTerm <- make.Fterm(ncoef=2, Ufd=Valvefd, name="Valve")
 FList <- vector("list", 1)
 FList[[1]] <- FTerm
 #  Define the single differential equation in the first order model
-TrayVariable <- make.variable(name="Tray level", order=1, XList=XList, FList=FList)
-#  check the object for internal consistency
+TrayVariable <- make.Variable(name="Tray level", order=1, XList=XList, FList=FList)
 TrayList=vector("list",1)
 TrayList[[1]] <- TrayVariable
-#  check the object for internal consistency
-TrayList <- modelCheck(TrayList, TrayCoefList)
+#  Set up the basis list for the tray variable
+# Construct the basis object for tray variable
+#  Order 5 spline basis with four knots at the 67
+#   to allow discontinuity in the first derivative
+#  and 15 knots between 67 and 193
+Traynorder <- 5
+Traybreaks <- c(0, rep(67,3), seq(67, 193, len=15))
+Traynbasis <- 22
+TrayBasis  <- create.bspline.basis(c(0,193), Traynbasis, Traynorder, Traybreaks)
+TrayBasisList    <- vector("list",1)
+TrayBasisList[[1]] <- TrayBasis
+#  check the object for internal consistency and make model list
+TrayModelList <- make.Model(TrayBasisList, TrayList, TrayCoefList)
 #
 #  Example 2:  The head impact data
 #
@@ -97,9 +107,9 @@ HeadImpactRng  <- c(0,60) # Define range time for estimated model
 # Set up the constant basis
 conbasis <- create.constant.basis(HeadImpactRng)
 # Define the three constant coefficient functions
-coef1 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
-coef2 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
-coef3 <- make.coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef1 <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef2 <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
+coef3 <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
 #  Set up the coefficient list
 coefList  <- vector("list",3)
 coefList[[1]] <- coef1
@@ -126,12 +136,21 @@ Fterm      <- make.Fterm(ncoef=3, Ufd=Pulsefd, factor=1, name="pulse")
 FList      <- vector("list",1) 
 FList[[1]] <- Fterm
 #  Define the single differential equation in the model
-HeadImpactVariable <- make.variable(order=2, XList=XList, FList=FList)
+HeadImpactVariable <- make.Variable(order=2, XList=XList, FList=FList)
 #  Define list of length one containing the equation definition
 HeadImpactList=vector("list",1)
 HeadImpactList[[1]] <- HeadImpactVariable
+#  Construct the basis for representing the variable as a
+#  functional data object
+knots     <- c(0,14,14,14,15,15,seq(15,60,len=11))
+norder    <- 6
+nbasis    <- 21
+HeadImpactBasis <- create.bspline.basis(HeadImpactRng,nbasis,norder,knots)
+#  set up basis list
+XbasisList <- vector("list",1)
+XbasisList[[1]] <- HeadImpactBasis
 #  check the object for internal consistency
-HeadImpactList <- modelCheck(HeadImpactList, coefList)
+HeadImpactList <- make.Model(XbasisList, HeadImpactList, coefList)
 #
 #  Example 3:  The X coordinate of the fda script data
 #
@@ -154,8 +173,8 @@ nAknots   <- nAbasis + 1
 Aknots    <- seq(fdarange[1],fdarange[2],len=nAknots)
 Abasisobj <- create.bspline.basis(fdarange,nAbasis,nAorder,Aknots)
 #  Define the two coefficient  functions in this model
-coef1 <- make.coef(conbasis,  0.04,                TRUE)
-coef2 <- make.coef(Abasisobj, matrix(1,nAbasis,1), TRUE)
+coef1 <- make.Coef(conbasis,  0.04,                TRUE)
+coef2 <- make.Coef(Abasisobj, matrix(1,nAbasis,1), TRUE)
 # List array containing the coefficient lists
 coefList <- vector("list",2)
 coefList[[1]] <- coef1
@@ -176,12 +195,20 @@ Fterm <- make.Fterm(ncoef=2, Ufd=confd, factor=1, name="steps")
 FList <- vector("list", 1)
 FList[[1]] <- Fterm
 #  make variable for X coefficient of script
-Xvariable <- make.variable(name="X", order=2, XList=XList, FList=FList)
+Xvariable <- make.Variable(name="X", order=2, XList=XList, FList=FList)
 #  List array for the whole system
 fdaXList = vector("list",1)
 fdaXList[[1]] <- Xvariable
+#  Set up a list of basis objects for representing each
+#  coordinate as a functional data object.  
+nbasis   <- 79
+norder   <-  6 #  order 6 for a smooth 2nd deriv.
+fdabasis <- create.bspline.basis(fdarange, nbasis, norder)
+XbasisList <- vector("list",2)
+XbasisList[[1]] <- fdabasis
+XbasisList[[2]] <- fdabasis
 #  check the system specification for consistency
-fdaXList <- modelCheck(fdaXList, coefList)
+fdaXList <- make.Model(XbasisList, fdaXList, coefList)
 #
 #  Example 4:  Average temperature in Montreal
 #
@@ -226,9 +253,6 @@ Wbasisobj <- create.fourier.basis(dayrange, nWbasis)
 #  constant forcing coefficient for constant forcing
 nAbasisC   <- 1
 AbasisobjC <- create.constant.basis(dayrange)
-#  fourier coefficint function for radiative forcing
-nAbasisC   <- 3
-AbasisobjC <- create.fourier.basis(dayrange, nAbasisC, 365)
 #  constant basis for the cosine forcing
 nAbasisF   <- 1
 AbasisobjF <- create.constant.basis(dayrange)
@@ -239,9 +263,9 @@ linfun <- list(fd=fun.explinear, Dfd=fun.Dexplinear, more=Wbasisobj)
 coefListW  <-list(fun=linfun, parvec=matrix(0,nWbasis,1), 
                   estimate=TRUE)
 #  Coefficient for constant forcing
-coefListA1 <- make.coef(fun=AbasisobjC, parvec=1, estimate=TRUE)
+coefListA1 <- make.Coef(fun=AbasisobjC, parvec=1, estimate=TRUE)
 #  Coeffcient for cosine forcing
-coefListA2 <- make.coef(fun=AbasisobjF, parvec=1, estimate=TRUE)
+coefListA2 <- make.Coef(fun=AbasisobjF, parvec=1, estimate=TRUE)
 #  coefList constructed
 coefList <- vector("list",3)
 coefList[[1]] <- coefListW
@@ -265,9 +289,17 @@ FList <- vector("list", 2)
 FList[[1]] <- Fterm1
 FList[[2]] <- Fterm2
 #  model list object
-TempVar <- make.variable(name="temperature", order=1, XList=XList, FList=FList)
+TempVar <- make.Variable(name="temperature", order=1, XList=XList, FList=FList)
+#  basis for 5-day block averages
+norder    <- 5
+daybreaks <- seq(0,365,5)
+nbreaks   <- length(daybreaks)
+nbasis    <- norder + nbreaks - 2
+daybasis  <- create.bspline.basis(dayrange, nbasis)
+dailyBasisList <- vector("list",1)
+dailyBasisList[[1]] <- daybasis
 # set up dailyList
-dailyList <- vector("list",1)
-dailyList[[1]] <- TempVar
-dailyList <- modelCheck(dailyList, coefList)
+dailyModelList <- vector("list",1)
+dailyModelList[[1]] <- TempVar
+dailyModelList <- make.Model(dailyBasisList, dailyModelList, coefList)
 }

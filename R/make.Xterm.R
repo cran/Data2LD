@@ -1,4 +1,6 @@
 make.Xterm <- function(variable, ncoef, derivative=0, factor=1, name=NULL) {
+  #  assemble details specifying a homogeneous term 
+  #  last modified 5 January 2019
   if (floor(variable) != variable || variable < 1) {
     stop("Argument VARIABLE is not a positive integer.")
   }
@@ -8,7 +10,7 @@ make.Xterm <- function(variable, ncoef, derivative=0, factor=1, name=NULL) {
   if (floor(derivative) != derivative || derivative < 0) {
     stop("Argument DERIVATIVE is not a positive integer.")
   }
-  termList <- list(variable=variable, ncoef=ncoef, derivative=derivative, 
+  XtermList <- list(variable=variable, ncoef=ncoef, derivative=derivative, 
                    factor=factor, name=name)
-  return(termList)
+  return(XtermList)
 }

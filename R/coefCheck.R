@@ -16,8 +16,9 @@ coefCheck <- function(coefList, report=TRUE) {
   #  If this test is not passed, the checking terminates.
   #
   #  3. for each coefList, the index field indicating estimated parameters
-  #  is set up, with the indices of the estimated homogeneous or beta
-  #  coefficients coming first.
+  #  is set up.  This is the positions in the theta vector of all estimated
+  #  parameters of the parmaters for each coefficient in order by which
+  #  the coefficients appear in coefList.
   #
   #  4. for any general coefficient functions, the fields and their objects
   #  are the checked.
@@ -28,11 +29,7 @@ coefCheck <- function(coefList, report=TRUE) {
   #  more       any object
   #  
   
-  #  the following comment lines are deprecated:
-  #  coeftype   string,  {'alpha', 'beta', 'force', 'homo', 'homog',
-  #                       'homogeneous'}
-  
-  #  Last modified 26 June 2018
+  #  Last modified 15 January 2019
   
   #  -------------------------------  Step 1  -------------------------------
   
@@ -70,7 +67,7 @@ coefCheck <- function(coefList, report=TRUE) {
   for (icoef in 1:ncoef) {
     coefListi <- coefList[[icoef]]
     
-    #  check that all struct objects contain a field named "parvec"
+    #  check that all Listuct objects contain a field named "parvec"
     
     if (is.null(coefListi$parvec)) {
       warning(paste("List object for member ", icoef,  
@@ -99,7 +96,7 @@ coefCheck <- function(coefList, report=TRUE) {
       }
     }
     
-    #  check that all struct objects contain a field named "estimate"
+    #  check that all Listuct objects contain a field named "estimate"
     
     if (is.null(coefListi$estimate)) {
       warning(paste("Listuct object for member ", icoef,
@@ -122,32 +119,7 @@ coefCheck <- function(coefList, report=TRUE) {
       }
     }
     
-    # #  check that all list objects contain a member named "coeftype"
-    # 
-    # if (is.null(coefListi$coeftype)) {
-    #   warning(paste("Listuct object for member ", icoef,
-    #                 " does not have a coeftype field."))
-    #   errwrd <- TRUE
-    # } else {
-    #   coeftype <- coefListi$coeftype
-    #   if (!is.character(coeftype)) {
-    #     warning(paste("coeftype for member ", icoef,
-    #                   " is not a string."))
-    #     errwrd <- TRUE
-    #   }
-    #   if (!(coeftype == "beta"        ||
-    #         coeftype == "homo"        ||
-    #         coeftype == "homogeneous" ||
-    #         coeftype == "alpha"       ||
-    #         coeftype == "force"       ||
-    #         coeftype == "forcing")) {
-    #     warning(paste("Field coeftype for member ", icoef, " is not one of: ",
-    #                   "alpha, beta, homo, homogeneous, force, forcing."))
-    #     errwrd <- TRUE
-    #   }
-    # }
-    
-    #  check that all struct objects contain a field named "fun"
+    #  check that all Listuct objects contain a field named "fun"
     
     if (is.null(coefListi$fun)) {
       warning(paste("List object for member ", icoef, " does not have a fun field."))
@@ -168,9 +140,9 @@ coefCheck <- function(coefList, report=TRUE) {
   if (errwrd) stop("Errors found, cannot continue.")
   
   #  -------------------------------  Step 3  -------------------------------
-  
+
   #  generate index fields sequentially
-  
+
   ntheta <- 0
   theta  <- NULL
   m2 <- 0
@@ -187,24 +159,7 @@ coefCheck <- function(coefList, report=TRUE) {
       coefListNew[[icoef]] <- coefListi
     }
   }
-  
-  # The following lines are deprecated:
-  # for (icoef in 1:ncoef) {
-  #   coefListi <- coefList[[icoef]]
-  #   if (coefListi$estimate &&
-  #       (coefListi$coeftype == "alpha"        ||
-  #        coefListi$coeftype == "force"        ||
-  #        coefListi$coeftype == "forcing")) {
-  #     nbasisi <- length(coefListi$parvec)
-  #     m1 <- m2 + 1
-  #     m2 <- m2 + nbasisi
-  #     coefListi$index <- m1:m2
-  #     ntheta <- ntheta + nbasisi
-  #     theta  <- c(theta, parveci)
-  #     coefListNew[[icoef]] <- coefListi
-  #   }
-  # }
-  
+
   #  -------------------------------  Step 4  -------------------------------
   
   #  if the fun field is a list object, check the object
@@ -248,7 +203,7 @@ coefCheck <- function(coefList, report=TRUE) {
   
   if (report) {
     for (icoef in 1:ncoef) {
-      coefListi <- coefList[[icoef]]
+      coefListi <- coefListNew[[icoef]]
       cat("-------------------------------------------\n")
       cat("Coefficient ",icoef,"\n")
       if (is.fd(coefListi$fun)) {
@@ -259,9 +214,12 @@ coefCheck <- function(coefList, report=TRUE) {
       npar = length(coefListi$parvec)
       if (npar < 6) {
         cat("    Parameter value(s): ", coefListi$parvec, "\n")
+        cat("    Index:              ", coefListi$index,  "\n")
       } else {
         cat("    Parameter value(s):\n")
         cat(coefListi$parvec)
+        cat("\n")
+        cat(coefListi$index)
         cat("\n")
       }
       if (coefListi$estimate) {
@@ -269,15 +227,10 @@ coefCheck <- function(coefList, report=TRUE) {
       } else {
         cat("    Parameter value(s) are fixed.\n")
       }
-      # cat("    Coefficient type is ",coefListi$coeftype,".\n")
     }
     cat("-------------------------------------------\n")
   }
       
-  for (icoef in 1:ncoef) {
-    coefListi <- coefList[[icoef]]
-  }
-    
   return(list(coefList=coefListNew, theta=theta, ntheta=ntheta))
   
 }

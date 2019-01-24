@@ -10,10 +10,10 @@
   times per second with a background noise level of about 0.05 centimeters.
 }
 \usage{
-  fdascript
+  FDAScript
 }
 \format{
-  An array object \code{fdascript} with dimensions 1401, 20, and 2.  
+  An array object \code{FDAScript} with dimensions 1401, 20, and 2.  
   The first dimension is the number of observations in each record, the second is 
   the records, and the third dimension is for the X and Y coordinate.
 }

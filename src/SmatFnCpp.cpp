@@ -2,9 +2,9 @@
 #include <Rinternals.h>
 
 extern "C" {
-  SEXP SmatFnC(SEXP nXbasisw, SEXP nWbasisw, SEXP nUbasisj, 
-               SEXP nAbasisj, SEXP nrep,     
-               SEXP BVECW, SEXP AVECJ, SEXP UCOEFJ, SEXP BATENS)
+  SEXP SmatFnCpp(SEXP nXbasisw, SEXP nWbasisw, SEXP nUbasisj, 
+                 SEXP nAbasisj, SEXP nrep,     
+                 SEXP BVECW, SEXP AVECJ, SEXP UCOEFJ, SEXP BATENS)
   {
     int nSmat;
     SEXP Smat;

@@ -1,19 +1,19 @@
 #include <stdlib.h> // for NULL
 #include <R_ext/Rdynload.h>
-#include "DASarrayFnC.h"
-#include "DBSarrayFnC.h"
-#include "DRarrayFnC.h"
-#include "loopJuanC.h"
-#include "RmatFnC.h"
-#include "SmatFnC.h"
+#include "DASarrayFnCpp.h"
+#include "DBSarrayFnCpp.h"
+#include "DRarrayFnCpp.h"
+#include "loopJuanCpp.h"
+#include "RmatFnCpp.h"
+#include "SmatFnCpp.h"
 
 static const R_CallMethodDef CallEntries[] = {
-     {"DASarrayFnC", (DL_FUNC) &DASarrayFnC, 8},
-     {"DBSarrayFnC", (DL_FUNC) &DBSarrayFnC, 8},
-     {"DRarrayFnC",  (DL_FUNC) &DRarrayFnC,  6},
-     {"loopJuanC",   (DL_FUNC) &loopJuanC,   5},
-     {"RmatFnC",     (DL_FUNC) &RmatFnC,     7},
-     {"SmatFnC",     (DL_FUNC) &SmatFnC,     9},
+     {"DASarrayFnCpp", (DL_FUNC) &DASarrayFnCpp, 8},
+     {"DBSarrayFnCpp", (DL_FUNC) &DBSarrayFnCpp, 8},
+     {"DRarrayFnCpp",  (DL_FUNC) &DRarrayFnCpp,  6},
+     {"loopJuanCpp",   (DL_FUNC) &loopJuanCpp,   5},
+     {"RmatFnCpp",     (DL_FUNC) &RmatFnCpp,     7},
+     {"SmatFnCpp",     (DL_FUNC) &SmatFnCpp,     9},
      {NULL, NULL, 0}
 };
 

@@ -1,5 +1,5 @@
-\name{make.coef}
-\alias{make.coef}
+\name{make.Coef}
+\alias{make.Coef}
 \title{
   Check each specification in list of linear differential equation specifications.
 }
@@ -12,7 +12,7 @@
   that specifies the structure of a single coefficient function.
 }
 \usage{
-make.coef(funobj, parvec, estimate=TRUE)
+make.Coef(funobj, parvec, estimate=TRUE)
 }
 \arguments{
   \item{funobj}{This is the definition coefficient function.  This may be specified 
@@ -42,7 +42,7 @@ make.coef(funobj, parvec, estimate=TRUE)
 \seealso{
   \code{\link{make.Xterm}},
   \code{\link{make.Fterm}},
-  \code{\link{make.variable}},
+  \code{\link{make.Variable}},
   \code{\link{coefCheck}}
 }
 \examples{

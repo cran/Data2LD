@@ -2,8 +2,8 @@
 #include <Rinternals.h>
 
 extern "C" {
-  SEXP DBSarrayFnC(SEXP nXbasisw, SEXP nWbasisw, SEXP nUbasisj, SEXP nAbasisj,  
-                   SEXP nrep,     SEXP AVECJ,    SEXP UCOEFJ,   SEXP BATENS)
+  SEXP DBSarrayFnCpp(SEXP nXbasisw, SEXP nWbasisw, SEXP nUbasisj, SEXP nAbasisj,  
+                     SEXP nrep,     SEXP AVECJ,    SEXP UCOEFJ,   SEXP BATENS)
   {
     int nDBSarray;
     SEXP DBSarray;
@@ -16,7 +16,7 @@ extern "C" {
     double* Ucoefj = REAL(UCOEFJ);
     double* BAtens = REAL(BATENS);
     double* rDBSarray;
-    nDBSarray = nXw*nRp*nAj;
+    nDBSarray = nXw*nRp*nWw;
     DBSarray  = PROTECT(allocVector(REALSXP, nDBSarray));
     rDBSarray = REAL(DBSarray);
     /* assign 0 to all positions */

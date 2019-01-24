@@ -17,7 +17,7 @@ modelVec2List <- function(thetavec, coefList) {
       index <- coefListi$index
       if (max(index) > ntheta) {
         stop("Coefficient index out of range.")
-      }
+      }    
       if (!is.numeric(thetavec[index])) {
         stop("theta value not numeric")
       } else {
@@ -28,4 +28,3 @@ modelVec2List <- function(thetavec, coefList) {
   }
   return(coefListnew)
 } 
-

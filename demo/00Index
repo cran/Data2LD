@@ -1,5 +1,6 @@
-AverageTemp   Annual temperature in Montreal forced by solar radiation and a constant
-FDAScript     Dynamic smoothing of cursive script for letters fda
-HeadImpact    Second order equation of acceleration of brain tissue after a cranial 
-Refinery      Fluid level in a tray forced by opening an input valve
+AverageTemp   Annual temperature in Montreal forced by solar radiation and a constant.
+HeadImpact    Second order equation of acceleration of brain tissue after a cranial. 
+Refinery      Fluid level in a tray forced by opening an input valve.
+CruiseControl Automobile speed regulated by a control function.
+fdascript     A single handwritten cursive script "fda".
 

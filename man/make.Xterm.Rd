@@ -37,10 +37,10 @@ make.Xterm(variable, ncoef, derivative=0, factor=1, name=NULL)
     J. O. Ramsay and G. Hooker (2017) \emph{Dynamic Data Analysis}. Springer.
 }
 \seealso{
-  \code{\link{make.coef}},
+  \code{\link{make.Coef}},
   \code{\link{make.Fterm}},
-  \code{\link{make.variable}},
-  \code{\link{modelCheck}}
+  \code{\link{make.Model}}
+  \code{\link{make.Variable}},
 }
 \examples{
 #  For examples of the use of this function, 

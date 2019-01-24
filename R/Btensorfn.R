@@ -12,9 +12,8 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
   #         j1, j2 <- NALLXTERM+1 is for the mth derivative of the X basis
   #         functions.
 
-  #  Last modified 22 May 2018
+  #  Last modified 11 January 2019
 
-  # print("Btensorfn")
   rng     <- XbasisList[[1]]$rangeval
   Wbasism <- create.constant.basis(rng)
   Wfdm    <- fd(1,Wbasism)
@@ -27,14 +26,13 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
   for (ivar in 1:nvar) {
     modelListi <- modelList[[ivar]]
     #  set up a two-dimensional list object within each member of BtensorList
-    nX <- modelListi$nallXterm+1
-    BtensorListi <- vector("list",nX)
-    for (jx in 1:nX) {
-      BtensorListi[[jx]] <- vector("list",nX)
+    nderiv <- modelListi$nallXterm + 1
+    BtensorListi <- vector("list",nderiv)
+    for (jx in 1:nderiv) {
+      BtensorListi[[jx]] <- vector("list",nderiv)
     }
     BtensorList[[ivar]] <- BtensorListi
     #  loop through derivative orders from 1 to nderiv
-    nderiv <- nX
     for (iw in 1:nderiv) {
       if (iw < nderiv) {
         modelListiw <- modelListi$XList[[iw]]
@@ -46,7 +44,7 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
       } else {
           WfdParw <- WfdParm
           Xbasisw <- XbasisList[[ivar]]
-          jw <- modelListi$order
+          jw      <- modelListi$order
       }
       if (is.fdPar(WfdParw) || is.fd(WfdParw) || is.basis(WfdParw)) {
         if (is.basis(WfdParw)) {
@@ -91,15 +89,15 @@ Btensorfn <- function(XbasisList, modelList, coefList) {
             if (Wtypew == "const"   && Wtypex == "const"   &&
                 Xtypew == "bspline" && Xtypex == "bspline" ) {
               # if both coefficients have constant bases, evaluate using inprod.Data2LD
-              XWXWmatij <- inprod.Data2LD(Xbasisw, Xbasisx, jw, jx)
-              XWXWmatij <- matrix(XWXWmatij, nXbasisw*nXbasisx, 1)
+              XWXWmatij <- inprod(Xbasisw, Xbasisx, jw, jx)
+              XWXWmatij <- matrix(t(XWXWmatij), nXbasisw*nXbasisx, 1)
             } else {
             #   # otherwise evaluate using inprod.TPbasis
               XWXWmatij <- inprod.TPbasis(Xbasisw, Wbasisw, Xbasisx, Wbasisx,
-                                          jx, 0, jw, 0)
+                                          jw, 0, jx, 0)
             }
             #  save as a single column sparse matrix
-            BtensorList[[ivar]][[ix]][[iw]] <- Matrix(XWXWmatij)
+            BtensorList[[ivar]][[iw]][[ix]] <- Matrix(t(XWXWmatij))
           }
         }
       }
