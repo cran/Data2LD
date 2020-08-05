@@ -24,6 +24,8 @@
 #        Load the fda script data and define the time values
 #  --------------------------------------------------------------------
 
+load("~/Documents/R/Data2LD/Data/fdascript.rda")
+
 #  select out the two 1401 by 20 matrices of coordinate values
 
 fdascriptX <- as.matrix(fdascript[,1,1])
@@ -31,8 +33,14 @@ fdascriptY <- as.matrix(fdascript[,1,2])
 
 #  Define the observation times in 100ths of a second
 
-centisec <- seq(0,2.3,len=1401)*100
+centisec <- seq(0,230,len=1401)
 fdarange <- range(centisec)
+
+yList = vector("list", 2)
+yList[[1]]$argvals <- centisec
+yList[[1]]$y       <- fdascriptX
+yList[[2]]$argvals <- centisec
+yList[[2]]$y       <- fdascriptY
 
 #  --------------------------------------------------------------------
 #   Set up the basis object for representing the X and Y coordinate 
@@ -51,9 +59,9 @@ nbasis   <- 79
 norder   <-  6 #  order 6 for a smooth 2nd deriv.
 fdabasis <- create.bspline.basis(fdarange, nbasis, norder)
 
-fdaBasisList <- vector("list",2)
-fdaBasisList[[1]] <- fdabasis
-fdaBasisList[[2]] <- fdabasis
+XbasisList <- vector("list",2)
+XbasisList[[1]] <- fdabasis
+XbasisList[[2]] <- fdabasis
 
 #  --------------------------------------------------------------------
 #   Use the basis to estimate the curve functions and their 
@@ -77,6 +85,7 @@ D2fdascriptY <- eval.fd(centisec, fdascriptfdY, 2)
 
 conbasis <- create.constant.basis(fdarange)
 confd    <- fd(1,conbasis)
+confdPar <- fdPar(confd)
 
 #  Define the order one Bspline basis for the coefficient
 #  of the forcing coefficients
@@ -89,39 +98,13 @@ Aknots    <- seq(fdarange[1],fdarange[2],len=nAknots)
 Abasisobj <- create.bspline.basis(fdarange,nAbasis,nAorder,Aknots)
 
 #  --------------------------------------------------------------------
-#  Define the two pairs of coefficient functions, save them in a List 
-#  object, and check the list object
-#  --------------------------------------------------------------------
-
-coef1 <- make.Coef(conbasis,  0.04,                TRUE)
-coef2 <- make.Coef(Abasisobj, matrix(1,nAbasis,1), TRUE)
-coef3 <- make.Coef(conbasis,  0.04,                TRUE)
-coef4 <- make.Coef(Abasisobj, matrix(1,nAbasis,1), TRUE)
-
-# Set up a list array containing the coefficient lists
-
-coefList <- vector("list",4)
-coefList[[1]] <- coef1
-coefList[[2]] <- coef2
-coefList[[3]] <- coef3
-coefList[[4]] <- coef4
-
-# Check the coefficients, a mandatory step since coefCheck also
-# sets up the number of parameters to estimate.    A summary is displayed.
-
-coefResult <- coefCheck(coefList)
-coefList   <- coefResult$coefList
-ntheta     <- coefResult$ntheta
-print(paste("ntheta = ",ntheta))
-
-#  --------------------------------------------------------------------
 #  Set up single homogeneous terms in the homogeneous portion of the 
 #  equations  D^2x = -beta_x x and D^2y = -beta_y y.  
 #  Each term involves a scalar constant multiplier -1.
 #  --------------------------------------------------------------------
 
-Xterm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
-Yterm <- make.Xterm(variable=2, derivative=0, ncoef=3, factor=-1)
+Xterm <- make.Xterm(confdPar, 0.4, TRUE, variable=1, derivative=0, factor=-1)
+Yterm <- make.Xterm(confdPar, 0.4, TRUE, variable=2, derivative=0, factor=-1)
 
 #  Set up to list arrays to hold these term specifications
 
@@ -137,8 +120,9 @@ XListY[[1]] <- Yterm
 #  The forcing functions are the unit constant function.
 #  --------------------------------------------------------------------
 
-FtermX <- make.Fterm(ncoef=2, Ufd=confd, factor=1)
-FtermY <- make.Fterm(ncoef=4, Ufd=confd, factor=1)
+parvecA <- matrix(1,nAbasis,1)
+FtermX <- make.Fterm(Abasisobj, parvecA, TRUE, Ufd=confd, factor=1)
+FtermY <- make.Fterm(Abasisobj, parvecA, TRUE, Ufd=confd, factor=1)
 
 #  Set up list arrays to hold forcing terms specs
 
@@ -165,38 +149,32 @@ fdaVariableList[[2]] <- Yvariable
 #  step because objects are set up in the output list that are needed
 #  in the analysis.  A summary is displayed.
 
-fda.modelList <- make.Model(fdaBasisList, fdaVariableList, coefList)
+checkfdaModel <- checkModel(XbasisList, fdaVariableList, TRUE)
 
-#  --------------------------------------------------------------------
-#  Set up the data lists for X- and Y-coordinates 
-#  usiing only the first replication.
-#  --------------------------------------------------------------------
+fdaModel <- checkfdaModel$modelList
+nparam   <- checkfdaModel$nparam
 
-fda.dataListX <- list(argvals=centisec, y=fdascriptX[,1])
-fda.dataListY <- list(argvals=centisec, y=fdascriptY[,1])
+print(paste("Number of parameters =",nparam))
 
-# Set up the data list array containing these two list objects
+rhoVec <- matrix(0.5,2,1)
 
-fda.dataList <- vector("list", 2)
-fda.dataList[[1]] <- fda.dataListX
-fda.dataList[[2]] <- fda.dataListY
+Data2LDResult <- Data2LD(yList, XbasisList, fdaModel, rhoVec, summary=TRUE)
 
-#  --------------------------------------------------------------------
-#  Single evaluation in order to set up the 4-way tensors and
-#  make the model list object
-#  --------------------------------------------------------------------
+MSE0      <- Data2LDResult$MSE        #  Mean squared error for fit to data
+DpMSE0    <- Data2LDResult$DpMSE      #  gradient with respect to parameter values
+D2ppMSE0  <- Data2LDResult$D2ppMSE    #  Hessian matrix
+XfdList   <- Data2LDResult$XfdParList        
+df        <- Data2LDResult$df      
+gcv       <- Data2LDResult$gcv    
+ISE       <- Data2LDResult$ISE        
+Var.theta <- Data2LDResult$Var.theta      
+Rmat      <- Data2LDResult$Rmat    
+Smat      <- Data2LDResult$Smat        
+DRarray   <- Data2LDResult$DRarray      
+DSmat     <- Data2LDResult$DSmat    
 
-rhoVec <- matrix(0.5,1,2)
-Data2LDResult <- Data2LD(fda.dataList, fdaBasisList, fda.modelList, coefList, rhoVec)
-
-MSE        <- Data2LDResult$MSE        #  Mean squared error for fit to data
-DpMSE      <- Data2LDResult$DpMSE      #  gradient with respect to parameter values
-D2ppMSE    <- Data2LDResult$D2ppMSE    #  Hessian matrix
-XfdParList <- Data2LDResult$XfdParList #  List of fdPar objects for variable values 
-df         <- Data2LDResult$df         #  Degrees of freedom for fit
-gcv        <- Data2LDResult$gcv        #  Generalized cross-validation coefficient
-ISE        <- Data2LDResult$ISE        #  Size of second term, integrated squared error
-Var.theta  <- Data2LDResult$Var.theta  #  Estimate sampling variance for parameters
+MSE0
+DpMSE0
 
 #  --------------------------------------------------------------------
 #  Set up sequence of rho values to be used in the optimization
@@ -204,14 +182,14 @@ Var.theta  <- Data2LDResult$Var.theta  #  Estimate sampling variance for paramet
 #  --------------------------------------------------------------------
 
 gamvec <- 0:7
-rhoMat <- matrix(exp(gamvec)/(1+exp(gamvec)),length(gamvec),2)
-nrho   <- dim(rhoMat)[1]
+rhoMat <- t(matrix(exp(gamvec)/(1+exp(gamvec)),8,2))
+nrho   <- dim(rhoMat)[2]
 
 #  values controlling optimization
 
-dbglev   <- 1              #  display level
-iterlim  <- 50             #  maximum number of iterations
-convrg   <- c(1e-6, 1e-4)  #  convergence criterion
+dbglev   <- 1     #  display level
+iterlim  <- 50    #  maximum number of iterations
+convrg   <- 1e-6  #  convergence criterion
 
 #  --------------------------------------------------------------------
 #  Set up arrays to hold results over rho and 
@@ -222,9 +200,9 @@ dfesave <- matrix(0,nrho,1)
 gcvsave <- matrix(0,nrho,1)
 MSEsave <- matrix(0,nrho,1)
 ISEsave <- matrix(0,nrho,1)
-thesave <- matrix(0,nrho,ntheta)
+thesave <- matrix(0,nrho,nparam)
 
-coefList.opt <- coefList
+fdaModel.opt <- fdaModel
 
 #  --------------------------------------------------------------------
 #  Step through rho values, optimizing at each step, and saving
@@ -232,13 +210,13 @@ coefList.opt <- coefList
 #  --------------------------------------------------------------------
 
 for (irho in 1:nrho) {
-  rhoVeci <- matrix(rhoMat[irho,],1,2)
+  rhoVeci <- matrix(rhoMat[,irho],2,1)
   print(paste("rho <- ",round(rhoVeci[1],5)))
-  Data2LD.optResult <- Data2LD.opt(fda.dataList, fdaBasisList, fda.modelList, coefList.opt, 
-                                   rhoVeci, convrg, iterlim, dbglev)
-  theta.opti    <- Data2LD.optResult$thetastore
-  coefList.opt  <- modelVec2List(theta.opti, coefList.opt)
-  Data2LDResult <- Data2LD(fda.dataList, fdaBasisList, fda.modelList, coefList.opt, rhoVeci)
+  Result <- Data2LD.opt(yList, XbasisList, fdaModel.opt, rhoVeci,  
+                                   convrg, iterlim, dbglev)
+  theta.opti       <- Result$thetastore
+  fdaModel.opt     <- modelVec2List(fdaModel.opt, theta.opti)
+  Data2LDResult    <- Data2LD(yList, XbasisList, fdaModel.opt, rhoVeci, summary=TRUE)
   thesave[irho,]   <- theta.opti
   dfesave[irho,1]  <- Data2LDResult$df
   gcvsave[irho,1]  <- Data2LDResult$gcv
@@ -246,13 +224,35 @@ for (irho in 1:nrho) {
   ISEsave[irho,1]  <- Data2LDResult$ISE
 }
 
+#  Each of the optimizations is started from the converged value for
+#  previous optimization, and they all converge smoothly and rapidly.
+#  If you want see how this can fail, change fdaModel.opt to just
+#  fdaModel, so that each iteration starts from the initial parameter
+#  values.  You will see a catastrophic failure for the last value of
+#  rho.
+
 #  --------------------------------------------------------------------
 #  Display degrees of freedom and gcv values for each step
 #  --------------------------------------------------------------------
 
 print("        rho    df      gcv")
-print(round(cbind(rhoMat[,1], dfesave, gcvsave),4))
+print(round(cbind(rhoMat[1,], dfesave, gcvsave),4))
 
+#  plot flow across rho values for the two homogeneous coefficients
+
+matplot(rhoMat[1,], thesave[,1:2], type="b", pch="o",lwd=2,
+xlab =  'rho', ylabel = 'beta coefficients')
+legend(x=0.6, y=0.04, c("X", "Y"), lty=c(1,2), lwd=2, col=c(1,2))
+
+#  plot flow of MSE and ISE
+
+par(mfrow=c(2,1))
+plot(rhoMat[1,], MSEsave, type="b", pch="o",lwd=2,
+     xlab = "rho", ylab = "MSE")
+subplot(2,1,2)
+plot(rhoMat[1,], ISEsave, type="b", pch="o",lwd=2,
+     xlab = "rho", ylab = "ISE")
+     
 #  --------------------------------------------------------------------
 #  Evaluate the fit for parameter values at the highest rho value
 #  and display the numerical results
@@ -260,9 +260,9 @@ print(round(cbind(rhoMat[,1], dfesave, gcvsave),4))
 
 irho <- 8
 theta    <- thesave[irho,]
-coefList <- modelVec2List(theta, coefList)
-rho       <- rhoMat[irho,]
-Data2LDResult <- Data2LD(fda.dataList, fdaBasisList, fda.modelList, coefList, rho)
+fdaModel <- modelVec2List(fdaModel, theta)
+rho       <- rhoMat[,irho]
+Data2LDResult <- Data2LD(yList, XbasisList, fdaModel, rho, summary=TRUE)
 MSE        <- Data2LDResult$MSE        #  Mean squared error for fit to data
 DpMSE      <- Data2LDResult$DpMSE      #  gradient with respect to parameter values
 D2ppMSE    <- Data2LDResult$D2ppMSE    #  Hessian matrix
@@ -276,8 +276,8 @@ print(paste("MSE = ", round(MSE,4)))
 print(paste("df  = ", round(df, 4)))
 print(paste("gcv = ", round(gcv,4)))
 
-print(paste("X reaction speed = ",round(theta[ 1],3)))
-print(paste("Y reaction speed = ",round(theta[22],3)))
+print(paste("X reaction speed = ",round(theta[1],3)))
+print(paste("Y reaction speed = ",round(theta[2],3)))
 
 #  --------------------------------------------------------------------
 #  Display the graphical results
@@ -304,17 +304,6 @@ plot(fdascriptfineX, fdascriptfineY, type="l",
 points(fdascriptX[,1], fdascriptY[,1], pch="o")
 points(fdascriptKnotsX$y, fdascriptKnotsY$y, pch="X", col=2)
 
-#  plot step heights as a script
-
-indX <-  2:21;
-indY <- 23:42;
-
-StepX <- theta[indX]
-StepY <- theta[indY]
-
-plot(StepX, StepY, type="b", 
-     xlab="X coordinate", ylab="Y coordinate")
-
 #  plot fit to the data in two-panels
 
 par(mfrow=c(2,1))
@@ -326,18 +315,49 @@ plot(centisec, fdascriptY[,1], type="p",
      xlab="Time (centisec)", ylab="Y-coordinate")
 lines(fdascriptTimefine, fdascriptfineY)
 
-#  plot fit to acceleration
+#  plot the step heights
 
-D2fdascriptfineX  <- eval.fd(fdascriptTimefine, fdascriptfdX, 2)
-D2fdascriptfineY  <- eval.fd(fdascriptTimefine, fdascriptfdY, 2)
+fdascriptKnotsX    = eval.fd(Aknots, fdascriptfdX);
+fdascriptKnotsY    = eval.fd(Aknots, fdascriptfdY);
 
 par(mfrow=c(2,1))
-plot(centisec, D2fdascriptX[,1], type="p",
-     xlab="Time (centisec)", ylab="D2X-coordinate")
-lines(fdascriptTimefine, D2fdascriptfineX)
 
-plot(centisec, D2fdascriptY[,1], type="p",
-     xlab="Time (centisec)", ylab="D2Y-coordinate")
-lines(fdascriptTimefine, D2fdascriptfineY)
+plot( c(  0,  0), c(0,fdascriptKnotsX[1]), type="l", lwd=2,
+      xlim=c(0,230), ylim=c(-40,40), xlab = "", ylab = "X")
+lines(c(230,230), c(fdascriptKnotsX[20],0), type="l", lwd=2) 
+lines(c(  0,230), c(0,0), type="l", lwd = 2, lty=2)
+for (i in 1:20) {
+  lines(c(Aknots[i],Aknots[i+1]), c(fdascriptKnotsX[i],fdascriptKnotsX[i]), 
+       type="l", lwd=2)
+}
+for (i in 1:19) {
+  lines(c(Aknots[i+1],Aknots[i+1]), 
+        c(fdascriptKnotsX[i],fdascriptKnotsX[i+1]), type="l", lwd=2)
+}
+
+plot( c(  0,  0), c(0,fdascriptKnotsY[1]), type="l", lwd=2,
+      xlim=c(0,230), ylim=c(-40,40), xlab = "Time (centiseconds", ylab = "Y")
+lines(c(230,230), c(fdascriptKnotsY[20],0), type="l", lwd=2) 
+lines(c(  0,230), c(0,0), type="l", lwd = 2, lty=2)
+for (i in 1:20) {
+  lines(c(Aknots[i],Aknots[i+1]), c(fdascriptKnotsY[i],fdascriptKnotsY[i]), 
+        type="l", lwd=2)
+}
+for (i in 1:19) {
+  lines(c(Aknots[i+1],Aknots[i+1]), 
+        c(fdascriptKnotsY[i],fdascriptKnotsY[i+1]), type="l", lwd=2)
+}
+
+#  plot step heights as a script
+
+indX <-  3:22;
+indY <- 23:42;
+
+StepX <- theta[indX]
+StepY <- theta[indY]
+
+plot(StepX, StepY, type="b", 
+     xlab="X coordinate", ylab="Y coordinate")
+
 
 

@@ -1,5 +1,5 @@
-Data2LD <- function(yList, XbasisList, modelList, coefList,
-                      rhoVec=0.5*rep(1,nvar), summary=TRUE) {
+Data2LD <- function(yList, XbasisList, modelList, rhoVec=0.5*rep(1,nvar), 
+                    summary=TRUE) {
 #  Data2LD  stands for "Data to Linear Dynamics"
 #  It approximates the data in argument YLIST by one or smooth
 #  functions x_i, i=1,,d.  This approximation is defined by a set
@@ -23,7 +23,7 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #  2.  The number and location of times of observation t_j  can vary
 #      from one observed variable to another.
 #  using a roughness penaltylinear differential operator that depends
-#  on unknown parameters in list COEFLIST, which is described below.
+#  on unknown parameters in list MODELLIST, which is described below.
 #
 #  The fitting functions x_i(t) in turn, here assumed to be defined over
 #  the interval [0,T], are defined by basis function expansions:
@@ -92,20 +92,14 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #  The structure of the model is defined in list MODELLIST, which is
 #  described below.
 #
-#  This version disassociates coefficient functions from equation
-#  definitions to allow some coefficients to be used repeatedly and for
-#  both homogeneous and forcing terms.  It requires an extra argument
-#  COEFLIST that contains the coefficients and the position of their
-#  coefficient vectors in vector THETA.
-#
 #  ------------------------------------------------------------------------
 #
 #  Arguments:
 #
 #  YLIST      A list of length NVAR.  Each list contains in turn
-#                a struct object with fields:
+#                a list object with fields:
 #                  "argvals" is a vector of length n_i of observation times
-#                  "y" contains a matrix with n_i rows and NREP columns.
+#                  "y" contains the n_i observations.
 #                The number of columns must be the same for all variables,
 #                except that, if a list is empty, that variable is taken to
 #                be not observed.
@@ -116,7 +110,7 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #  MODELLIST  A list of length NVAR. Each list contains a
 #                list object with members:
 #                XList  list of length number of homogeneous terms
-#                          Each list contains a struct object with members:
+#                          Each list contains a list object with members:
 #                          fun         a fdPar object for the coefficient
 #                          variable    the index of the variable
 #                          derivative  the order of its derivative
@@ -125,7 +119,7 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #                          factor      a scalar multiplier (def. 1)
 #                          estimate    0, held fixed, otherwise, estimated
 #                FList  list of length number of forcing terms
-#                          Each list contains a struct object with members:
+#                          Each list contains a list object with members:
 #                          AfdPar  an fdPar object for the coefficient
 #                          Ufd     an fd object for the forcing function
 #                          ncoef   if coefficient estimated, its location
@@ -137,20 +131,6 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #                nallXterm  the number of homogeneous terms
 #                nallFterm  the number of forcing functions
 #
-#  COEFLIST   A list of length NCOEF.  Each member contains a
-#                a list object with members:
-#               parvec    a vector of parameters
-#               estimate  0, held fixed, otherwise, estimated
-#               coeftype  homogeneous or forcing
-#               fun       functional basis, fd, or fdPar object,
-#                            or a struct object for a general function
-#                            with fields:
-#                 fd        function handle for evaluating function
-#                 Dfd       function handle for evaluating
-#                              partial derivative with respect to parameter
-#                 more      object providing additional information for
-#                             evaluating coefficient function
-#
 #  RHOVEC     A vector of length NVAR containing values in [0,1].
 #                The data sums of squares are weighted by P and
 #                the roughness penalty by 1-P.
@@ -158,13 +138,13 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #  ------------------------------------------------------------------------
 #
 #  Output objects (d <- number of equations,
-#                  NTHETA is the total number of estimated parameters):
+#                  nparams is the total number of estimated parameters):
 #
 #  MSE      The weighted mean squared errors computed over the variables
 #              with data.
 #  DpMSE    The gradient of the objective function MSE with respect to
   #            the estimated parameters.
-#  D2ppMSE  A square symmetric matrx of order NTHETA that contains
+#  D2ppMSE  A square symmetric matrx of order nparams that contains
 #              the second partial derivatives of the objective function.
 #  XFDPARLIST  A list of length d containing functional parameter
 #              objects of class fdPar for the estimated functions x_i(t).
@@ -183,36 +163,27 @@ Data2LD <- function(yList, XbasisList, modelList, coefList,
 #              coefficients in the basis function expansions of the
 #              variables.  This matrix defines the size of the second term
 #              in the objective function.
-#  SMAT     Either a vector of length equal to the order of RMAT if
-#              there is only one replication, or a matrix with number of
-#              columns equal to the number of replications NREP.
-#  fitMap   A matrix with number of rows equal to the total number of
+#  SMAT     A column vector of length equal to the order of RMAT.
+#  FITMAP   A matrix with number of rows equal to the total number of
 #              coefficients in the basis expansions of variables and
 #              number of columns equal the total number of observations.
 #              This matrix is the linear map from the data to the
 #              combined coefficients.
 
-#  Last modified 18 January 2019
+#  Last modified 3 June 2020
 
 nvar <- length(modelList)
-
-#  ------------------------------------------------------------------------
-#                    Check coefList
-#  ------------------------------------------------------------------------
-
-coefCheckList <- coefCheck(coefList, FALSE)
-coefList      <- coefCheckList$coefList
-ntheta        <- coefCheckList$ntheta
 
 #  ------------------------------------------------------------------------
 #  Store the number of forcing functions for each variable and load the
 #  starting position in the composite vector of estimated coefficients.
 #  ------------------------------------------------------------------------
 
-nhomog   <- rep(0,nvar)
-nforce   <- rep(0,nvar)
-nthetaH  <- 0
-nthetaF  <- 0
+nhomog  <- rep(0,nvar)
+nforce  <- rep(0,nvar)
+nthetaH <- 0
+nthetaF <- 0
+nparams <- 0
 for (ivar in 1:nvar) {
   modelListi <- modelList[[ivar]]
   nXterm <- modelListi$nallXterm
@@ -221,11 +192,9 @@ for (ivar in 1:nvar) {
     nhomog[ivar] <- nXterm
     for (iterm in 1:nXterm) {
       XListi    <- modelListi$XList[[iterm]]
-      ncoefi    <- XListi$ncoef
-      coefListi <- coefList[[ncoefi]]
-      if (coefListi$estimate == TRUE) {
-        nthetaH <- nthetaH + length(coefListi$parvec)
-      }
+      nparamsi <- length(XListi$parvec)
+      nthetaH  <- nthetaH + nparamsi
+      nparams  <- nparams + nparamsi
     }
   }
   nFterm <- modelListi$nallFterm
@@ -234,11 +203,9 @@ for (ivar in 1:nvar) {
     nforce[ivar] <- nFterm
     for (iterm in 1:nFterm) {
       FListi <- modelListi$FList[[iterm]]
-      ncoefi <- FListi$ncoef
-      coefListi <- coefList[[ncoefi]]
-      if (coefListi$estimate) {
-        nthetaF <- nthetaF + length(coefListi$parvec)
-      }
+      nparamsi <- length(FListi$parvec)
+      nthetaF  <- nthetaF + nparamsi
+      nparams  <- nparams + nparamsi
     }
   }
 }
@@ -248,7 +215,6 @@ for (ivar in 1:nvar) {
 #  ------------------------------------------------------------------------
 
 ycheckList <- yListCheck(yList, nvar)
-nrep       <- ycheckList$nrep
 nvec       <- ycheckList$nvec
 dataWrd    <- ycheckList$dataWrd
 
@@ -268,6 +234,8 @@ if (!is.list(XbasisList)) {
 if (length(XbasisList) != nvar) {
   stop("BASISLIST is not of length NVAR.")
 }
+
+#  check that cells contain basis objects
 
 errwrd <- FALSE
 ncoefvec <- matrix(0,nvar,1)
@@ -327,8 +295,8 @@ for (ivar in 1:nvar) {
 nsum     <- sum(nvec)
 ncoefsum <- sum(ncoefvec)
 Bmat     <- matrix(0,ncoefsum,ncoefsum)
-basismat <- Matrix(0,nsum,ncoefsum)
-ymat     <- matrix(0,nsum,nrep)
+basismat <- matrix(0,nsum,ncoefsum)
+ymat     <- matrix(0,nsum,1)
 m2 <- 0
 n2 <- 0
 for (ivar in 1:nvar) {
@@ -344,7 +312,8 @@ for (ivar in 1:nvar) {
         yListi   <- yList[[ivar]]
         ymat[indn,] <- as.matrix(yListi$y)
         basismati   <- basismatList[[ivar]]
-        Bmat[ind,ind] <- weighti*(1-rhoVec[ivar])*crossprod(basismati)/nvec[ivar]
+        Bmat[ind,ind] <- 
+          weighti*(1-rhoVec[ivar])*crossprod(basismati)/nvec[ivar]
         basismat[indn,ind] <- basismati
     }
 }
@@ -358,7 +327,7 @@ for (ivar in 1:nvar) {
 
 #  There are parameters to estimate defining the homogeneous terms
 
-Data2LDRList <- Data2LD.Rmat(XbasisList, modelList, coefList, rhoVec, ntheta)
+Data2LDRList <- Data2LD.Rmat(XbasisList, modelList, rhoVec, nthetaH)
 Rmat <- Data2LDRList$Rmat
 if (nthetaH > 0) {
   DRarray <- Data2LDRList$DRarray
@@ -367,40 +336,28 @@ if (nthetaH > 0) {
   DRarray <- NULL
 }
 
-# print("Rmat:")
-# print(round(Rmat,5))
-# 
-# print("DRarray:")
-# print(round(DRarray,5))
-
 #  Matrices S and DS for variables having forcing functions
 
-Data2LDSList <- Data2LD.Smat(XbasisList, modelList, coefList, rhoVec,
-                             ntheta, nrep, nforce)
+Data2LDSList <- Data2LD.Smat(XbasisList, modelList, rhoVec,
+                             nthetaH, nthetaF, nforce, nparams)
 Smat <- Data2LDSList$Smat
 
 if (nthetaF > 0) {
-  DSarray <- Data2LDSList$DSarray
+  DSmat <- Data2LDSList$DSmat
 } else {
   #  No estimated parameters are involved in forcing terms
-  DSarray <- NULL
+  DSmat <- NULL
 }
-
-# print("Smat:")
-# print(round(Smat,5))
-# 
-# print("DSarray:")
-# print(round(DSarray,5))
 
 Cmat <- Bmat + Rmat
 
-Ceigvals <- eigen(Cmat)$values
+#  Ceigvals <- eigen(Cmat)$values
 
 #  ------------------------------------------------------------------------
 #                     Set up right side of equation
 #  ------------------------------------------------------------------------
 
-Dmat <- matrix(0,ncoefsum,nrep)
+Dmat <- matrix(0,ncoefsum,1)
 m2 <- 0
 for (ivar in 1:nvar) {
     m1  <- m2 + 1
@@ -431,7 +388,7 @@ coef = as.matrix(coef)
 #  ------------------------------------------------------------------------
 #  Compute the vector of unpenalized error sum of squares, MSE,
 #  the sum of which is the outer objective function H(\theta|\rho).
-#  Each MSE_i is normalized by dividing by NREP and by the n_i"s.
+#  Each MSE_i is normalized by dividing by the n_i"s.
 #  ------------------------------------------------------------------------
 
 xmat <- basismat %*% coef
@@ -450,13 +407,9 @@ for (ivar in 1:nvar) {
     rmati  <- ymati - xmati
     SSEi   <- sum(rmati^2)
     SSEtot <- SSEtot + weighti*SSEi
-    MSE    <- MSE + weighti*SSEi/nrep/nvec[ivar]
+    MSE    <- MSE + weighti*SSEi/nvec[ivar]
   }
 }
-
-#  compute residual variance
-
-Rvar <- SSEtot/nsum
 
 #  ------------------------------------------------------------------------
 #                     Compute summary values
@@ -480,12 +433,12 @@ if (summary) {
     }
   }
   RgtFactor <- solve(Cmat,y2cFac)
-  fitMap <- Matrix(basismat %*% RgtFactor)
+  fitMap    <- basismat %*% RgtFactor
 
   #  Use fitMap to compute a equivalent degrees of freedom measure
 
-  df <- sum(diag(fitMap))
-
+  df <- sum(diag(2*fitMap)) - sum(fitMap^2)
+   
   #  set up the functional data object for the output smooth of the data
 
   XfdParList <- vector("list",nvar)
@@ -498,7 +451,11 @@ if (summary) {
     Xfdobji <- fd(coef[ind,],Xbasisi)
     XfdParList[[ivar]] <- fdPar(Xfdobji)
   }
-
+  
+  #  compute residual variance
+  
+  Rvar <- SSEtot/nsum
+  
   #  compute GCV
   if (df < nsum) {
     gcv <- Rvar/((nsum - df)/nsum)^2
@@ -507,12 +464,10 @@ if (summary) {
   }
 
   #  ------------------------------------------------------------------------
-  #  Compute unpenalized error integrated squares, ISE, the penalty term
-  #  loop through number of replications NREP
+  #  Compute unpenalized error integrated squaresP
   #  ------------------------------------------------------------------------
 
-  ISE <- Data2LD.ISE(XbasisList, modelList, coefList, coef, Rmat, Smat,
-                     nrep, nforce, rhoVec)
+  ISE <- Data2LD.ISE(XbasisList, modelList, coef, Rmat, Smat, nforce, rhoVec)
 } else {
   df  <- NULL
   gcv <- NULL
@@ -522,80 +477,76 @@ if (summary) {
 }
 
 #  ------------------------------------------------------------------------
-#       Compute total derivative of MSE wrt theta if required
+#       Compute total derivative of MSE wrt theta
 #  ------------------------------------------------------------------------
 
 #  Compute the partial derivatives of the coefficients with respect to the
 #  estimated parameters,  dc/dtheta
 
-if (nrep == 1) {
-  Dcoef <- matrix(0,ncoefsum,ntheta)
-} else {
-  Dcoef <- array(0, c(ncoefsum,ntheta,nrep))
-}
+Dcoef <- array(0, c(ncoefsum,nparams))
 
-# print("coef:")
-# print(round(coef,5))
-# print("Cmat:")
-# print(round(Cmat,5))
-# print("Dmat:")
-# print(round(Dmat,5))
-
-for (itheta in 1:ntheta) {
-  DRmati <- DRarray[,,itheta]
-  if (nrep == 1) {
-    if (is.null(DSarray)) {
-      DRi <- -DRmati %*% as.matrix(coef)
-      Dcoefi <- solve(Cmat,DRi)
-      Dcoef[,itheta] <- Dcoefi
+for (iparam in 1:nparams) {
+  if (iparam <= nthetaH) {
+    DRmati <- DRarray[,,iparam]
+    if (is.null(DSmat)) {
+      DRi <- -DRmati %*% coef
+      Dcoef[,iparam] <- matrix(solve(Cmat,DRi),ncoefvec[ivar],1)
     } else {
-      DRi <- -DRmati %*% as.matrix(coef)
-      DSi <- matrix(0,ncoefsum,1)
-      m2 <- 0
-      for (ivar in 1:nvar) {
-        m1 <- m2 + 1
-        m2 <- m2 + ncoefvec[ivar]
-        indi <- m1:m2
-        DSi[indi,1] <- -DSarray[indi,itheta]
-      }
-      Dcoefi <- solve(Cmat,(DRi + DSi))
-      Dcoef[,itheta] <- Dcoefi
+      DRi <- -DRmati %*% coef
+      DSi <- -DSmat[,iparam]
+      Dcoef[,iparam] <- matrix(solve(Cmat,(DRi + DSi)),ncoefsum,1)
     }
   } else {
-    if (is.null(DSarray)) {
-      for (irep in 1:nrep) {
-        DRi <- -DRmati %*% coef[,irep]
-        Dcoef[,itheta,irep] <- solve(Cmat,DRi)
-      }
-    } else {
-      for (irep in 1:nrep) {
-        DRi <- -DRmati %*% coef[,irep]
-        DSi <- matrix(0,ncoefsum,1)
-        m2 <- 0
-        for (ivar in 1:nvar) {
-          m1 <- m2 + 1
-          m2 <- m2 + ncoefvec[ivar]
-          indi <- m1:m2
-          DSi[indi,1] <- -DSarray[indi,itheta]
-        }
-        Dcoef[,itheta,irep] <- solve(Cmat,(DRi + DSi))
-      }
-    }
+    DSi <- -DSmat[,iparam]
+    Dcoef[,iparam] <- matrix(solve(Cmat, DSi),ncoefsum,1)
   }
 }
-  
-# print("Dcoef:")
-# print(round(Dcoef,5))
 
 #  ------------------------------------------------------------------------
 #            Compute the total theta-gradient of H
 #  ------------------------------------------------------------------------
 
 xmat    <- basismat %*% coef
-DpMSE   <- matrix(0,ntheta, 1)
-D2ppMSE <- matrix(0,ntheta, ntheta)
+DpMSE   <- matrix(0,nparams, 1)
+D2ppMSE <- matrix(0,nparams, nparams)
 if (summary) {
-  D2pyMSE <- matrix(0,ntheta, nsum)
+  D2pyMSE <- matrix(0,nparams, nsum)
+}
+
+xmat    <- basismat %*% coef
+DpMSE   <- matrix(0,nparams,1)
+D2ppMSE <- matrix(0,nparams,nparams)
+m2 <- 0
+for (ivar in 1:nvar) {
+  modelListi <- modelList[[ivar]]
+  nXterm <- modelListi$nallXterm
+  if (nXterm > 0) {
+    for (iterm in 1:nXterm) {
+      XListi   <- modelListi$XList[[iterm]]
+      m1 <- m2 + 1
+      m2 <- m2 + length(XListi$parvec)
+      estimate <- as.numeric(XListi$estimate)
+      for (m in m1:m2) {
+        if (estimate[m - m1 + 1] == 0) {
+          D2ppMSE[m,m] <- 1
+        }
+      }
+    }
+  }
+  nFterm <- modelListi$nallFterm
+  if (nFterm > 0) {
+    for (iterm in 1:nFterm) {
+      FListi   <- modelListi$FList[[iterm]]
+      m1 <- m2 + 1
+      m2 <- m2 + length(FListi$parvec)
+      estimate <- as.numeric(FListi$estimate)
+      for (m in m1:m2) {
+        if (estimate[m - m1 + 1] == 0) {
+          D2ppMSE[m,m] <- 1
+        }
+      }
+    }
+  }
 }
 
 m2 <- 0
@@ -609,29 +560,14 @@ for (ivar in 1:nvar) {
     xmati      <- xmat[m1:m2,]
     yVeci      <- yList[[ivar]]$y
     resmati    <- as.matrix(yVeci - xmati)
-    if (nrep == 1) {
-      BasDcoefi <- basismati %*% Dcoef
-      DpMSE   <- DpMSE   - 2*weighti*
-        (t(BasDcoefi) %*% as.matrix(resmati))/nvec[ivar]
-      D2ppMSE <- D2ppMSE + 
-        2*weighti*crossprod(BasDcoefi)/nvec[ivar]
-      if (summary) {
-        temp <- 2*weighti*t(BasDcoefi)/nvec[ivar]
-        D2pyMSE[,m1:m2] <- D2pyMSE[,m1:m2] - as.matrix(temp)
-      }
-    } else {
-      for (irep in 1:nrep) {
-        Dcoefi <- Dcoef[,,irep]
-        BasDcoefi <- basismati %*% Dcoefi
-        DpMSE   <- DpMSE   - 2*weighti*
-          (t(BasDcoefi) %*% as.matrix(resmati[,irep]))/nrep/nvec[ivar]
-        D2ppMSE <- D2ppMSE + 
-          2*weighti*crossprod(BasDcoefi)/nrep/nvec[ivar]
-        if (summary) {
-          temp <- 2*weighti*t(BasDcoefi)/nrep/nvec[ivar]
-          D2pyMSE[,m1:m2] <- D2pyMSE[,m1:m2] - as.matrix(temp)
-        }
-      }
+    BasDcoefi  <- basismati %*% Dcoef
+    DpMSE      <- DpMSE   - 2*weighti*
+      crossprod(BasDcoefi,resmati)/nvec[ivar]
+    D2ppMSE    <- D2ppMSE + 
+      2*weighti*crossprod(BasDcoefi)/nvec[ivar]
+    if (summary) {
+         D2pyMSE[,m1:m2] <- D2pyMSE[,m1:m2] - 
+           2*weighti*t(BasDcoefi)/nvec[ivar]
     }
   }
 }
@@ -648,18 +584,20 @@ if (summary) {
 if (summary) {
   return(list(MSE=MSE, DpMSE=DpMSE, D2ppMSE=D2ppMSE, XfdParList=XfdParList,
               df=df, gcv=gcv, ISE=ISE, Var.theta=Var.theta,
-              Rmat=Rmat, Smat=Smat))
+              Rmat=Rmat, Smat=Smat, DRarray=DRarray, DSmat=DSmat,
+              fitMap=fitMap))
 
 } else {
-  return(list(MSE=MSE, DpMSE=DpMSE, D2ppMSE=D2ppMSE))
+  return(list(MSE=MSE, DpMSE=DpMSE, D2ppMSE=D2ppMSE, XfdParList=XfdParList,
+              df=df, gcv=gcv, ISE=ISE))
 }
 
 }
 
 #   ---------------------------------------------------------------------------
 
-Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
-                         ntheta) {
+Data2LD.Rmat <- function(XbasisList, modelList,  rhoVec=rep(0.5,nvar), 
+                         nthetaH) {
   #  Data2LD_Rmat computes the penalty matrix R associated with the homogeneous
   #  portion of a linear differential operator L as well as its partial
   #  derivative with respect to parameters defining the homogeneous portion.
@@ -697,9 +635,9 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #               smoothing parameter LAMBDA is set to 0.
   #
   #  MODELLIST  A List aray of length NVAR. Each List contains a
-  #                struct object with members:
+  #                list object with members:
   #                XList  list of length number of homogeneous terms
-  #                          Each List contains a struct object with members:
+  #                          Each List contains a list object with members:
   #                          WfdPar  a fdPar object for the coefficient
   #                          variable    the index of the variable
   #                          derivative  the order of its derivative
@@ -707,7 +645,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #                                         in the composite vector
   #                          estimate    0, held fixed, otherwise, estimated
   #                FList  List arrau of length number of forcing terms
-  #                          Each List contains a struct object with members:
+  #                          Each List contains a list object with members:
   #                          AfdPar    an fdPar object for the coefficient
   #                          Ufd       an fd object for the forcing function
   #                          npar      if coefficient estimated, its location
@@ -717,24 +655,11 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #                name       a  tag for the variable
   #                nallXterm  the number of homogeneous terms
   #                nallFterm  the number of forcing functions
-  #  COEFLIST   A list array of length NCOEF.  Each list contaions a
-  #                a list object with members:
-  #               parvec    a vector of parameters
-  #               estimate  0, held fixed, otherwise, estimated
-  #               coeftype  homogeneous or forcing
-  #               fun       functional basis, fd, or fdPar object,
-  #                            or a struct object for a general function
-  #                            with fields:
-  #                 fd        function handle for evaluating function
-  #                 Dfd       function handle for evaluating
-  #                              partial derivative with respect to parameter
-  #                 more      object providing additional information for
-  #                             evaluating coefficient function
   #  RHOVEC   A vector of length NVAR containing values in [0,1].
   #                The data sums of squares are weighted by RHO and
   #               the roughness penalty by 1-RHO.
   
-  #  Last modified 18 January 2019
+  #  Last modified 3 June 2020
   
   #  ------------------------------------------------------------------------
   #                         Set up analysis
@@ -760,7 +685,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   T      <- Xrange[2] - Xrange[1]
   
   conbasis  <- create.constant.basis(Xrange)
-  coefListi <- list(parvec=1, estimate=FALSE, fun=fd(1,conbasis))
+  XListi <- list(parvec=1, estimate=FALSE, fun=fd(1,conbasis))
   
   #  ------------------------------------------------------------------------
   #                         Compute penalty matrix Rmat(theta)
@@ -775,8 +700,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   
   m2 <- 0
   for (ivar in 1:nvar) {
-    # print(paste("ivar = ",ivar))
-    #  select struct object for this variable that defines this variable's
+    #  select list object for this variable that defines this variable's
     #  structure.
     modelListi <- modelList[[ivar]]
     #  weight for this variable for computing fitting criterion
@@ -805,25 +729,23 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
     #  multiply by weight, value of smoothing parameter rho, and divide by
     #  duration of interval
     Rmatii <- weighti*rhoVec[ivar]*Rmatii/T
-    # print("Rmatii:")
-    # print(round(1000*Rmatii,5))
     #  initialize the left side submatrix withinin supermatrix Rmat
     Rmat[indi,indi] <- Rmat[indi,indi] + Rmatii
     #  now we compute the contribution to R mat for each pair of homogeneous
     #  terms in the equation
+    if (nXtermi > 0) {
     for (iw in 1:nXtermi) {
       #  select homogeneous term iw
-      # print(paste("iw = ",iw))
       modelListiw <- modelListi$XList[[iw]]
-      TListw   <- getHomoTerm(modelListiw, coefList)
+      TListw   <- getHomoTerm(modelListiw)
       indw     <- (ncoefcum[TListw$iv]+1):ncoefcum[TListw$iv+1]
       nXbasisw <- ncoefvec[TListw$iv]
       Xbasisw  <- XbasisList[[TListw$iv]]
+      if (nXtermi > 0) {
       for (ix in 1:nXtermi) {
-        # print(paste("ix = ",ix))
         modelListix <- modelListi$XList[[ix]]
         #  get the details for homogeneous coefficient ix
-        TListx    <- getHomoTerm(modelListix, coefList)
+        TListx    <- getHomoTerm(modelListix)
         indx      <- (ncoefcum[TListx$iv]+1):ncoefcum[TListx$iv+1]
         nXbasisx  <- ncoefvec[TListx$iv]
         Xbasisx   <- XbasisList[[TListx$iv]]
@@ -832,17 +754,13 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
           #  the user-supplied coefficient function case ...
           #  must be computed anew for each pair
           Rmatwx <- matrix(inprod.basis.Data2LD(
-            Xbasisw, Xbasisx, TListw$coefnList, TListx$coefnList,
+            Xbasisw, Xbasisx, modelListiw, modelListix,
             TListw$nderiv, TListx$nderiv), nXbasisw, nXbasisx)
         } else {
           #  the much faster case where both homogeneous coefficients
           #  are B-spline functional data objects
           Btenswx <- modelListi$Btens[[iw]][[ix]]
           #  reformat the vector of values
-          # print(c(nXbasisw,TListw$nWbasis,nXbasisx,TListx$nWbasis))
-          # print(round(TListw$Bvec,5))
-          # print(round(TListx$Bvec,5))
-          # print(round(as.matrix(Btenswx),5))
           Rmatwx  <- .Call("RmatFnCpp", as.integer(nXbasisw),     
                                         as.integer(TListw$nWbasis), 
                                         as.integer(nXbasisx),     
@@ -854,10 +772,9 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
         }
         #  apply the scale factors
         Rmatwx <- weighti*TListw$factor*TListx$factor*rhoVec[ivar]*Rmatwx/T
-        # print("Rmatwx:")
-        # print(round(1000*Rmatwx,5))
         #  increment the submatrix
         Rmat[indw,indx] <- Rmat[indw,indx] + Rmatwx
+      }
       }
       #  now we need to compute the submatrices for the product of
       #  the left side of the equation and each homogeneous term in
@@ -865,7 +782,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
       if (TListw$funtype) {
         #  user-supplied coefficient case
         Rmatiw <- matrix(inprod.basis.Data2LD(
-          Xbasisi, Xbasisw, coefListi, TListw$coefnList,
+          Xbasisi, Xbasisw, XListi, modelListiw,
           order, TListw$nderiv),
           nXbasisi,nXbasisw)
       } else {
@@ -884,11 +801,10 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
       }
       #  apply the scale factors
       Rmatiw  <- weighti*TListw$factor*rhoVec[ivar]*Rmatiw/T
-      # print("Rmatiw:")
-      # print(round(1000*Rmatiw,5))
       #  subtract the increment for both off-diagonal submatrices
       Rmat[indi,indw] <- Rmat[indi,indw] -   Rmatiw
       Rmat[indw,indi] <- Rmat[indw,indi] - t(Rmatiw)
+    }
     }
   }
   
@@ -899,7 +815,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #  The verbose commentary above will not be continued.
   #  ------------------------------------------------------------------------
   
-  DRarray <- array(0,c(ncoefsum,ncoefsum,ntheta))
+  DRarray <- array(0,c(ncoefsum,ncoefsum,nthetaH))
   
   m2 <- 0
   for (ivar in 1:nvar) {
@@ -908,7 +824,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
     m1   <- m2 + 1
     m2   <- m2 + ncoefvec[ivar]
     indi <- m1:m2
-    nXtermi <- modelListi$nallXterm
+    nXtermi  <- modelListi$nallXterm
     nXbasisi <- ncoefvec[ivar]
     Xbasisi  <- XbasisList[[ivar]]
     nderivi  <- modelListi$order
@@ -916,20 +832,23 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
     #  select all active coefficients
     #  loop through active variables within equation ivar
     #  whose coefficient require estimation
+    if (nXtermi > 0) {
     for (iw in 1:nXtermi) {
       modelListiw <- modelListi$XList[[iw]]
-      TListw  <- getHomoTerm(modelListiw, coefList)
-      if (TListw$estim) {
+      TListw  <- getHomoTerm(modelListiw)
+      Bestimw <- TListw$estim
+      if (any(Bestimw)) {
         #  define coefficient of estimated variable and
         #  it's derivative index
         indw     <- (ncoefcum[TListw$iv]+1):ncoefcum[TListw$iv+1]
-        indthw   <- TListw$coefnList$index
+        indthw   <- modelListiw$index
         nXbasisw <- ncoefvec[TListw$iv]
         Xbasisw  <- XbasisList[[TListw$iv]]
         #  loop through all active variables within equation ivar
+        if (nXtermi > 0) {
         for (ix in 1:nXtermi) {
           modelListix <- modelListi$XList[[ix]]
-          TListx  <- getHomoTerm(modelListix, coefList)
+          TListx  <- getHomoTerm(modelListix)
           #  define coefficient of active variable and
           #  it's derivative index
           indx      <- (ncoefcum[TListx$iv]+1):ncoefcum[TListx$iv+1]
@@ -941,46 +860,40 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
             #  user-coded case
             DRarraywx <- array(inprod.Dbasis.Data2LD(
               Xbasisw, Xbasisx,
-              TListw$coefnList, TListx$coefnList,
+              modelListiw, modelListix,
               TListw$nderiv, TListx$nderiv),
               c(nXbasisw,nXbasisx,length(indthw)))
           } else {
             #  fda object case
             Btenswx <- modelListi$Btens[[iw]][[ix]]
+            # DRarrayFnCpp returns a vector
             DRarraywx <- .Call("DRarrayFnCpp", as.integer(nXbasisw), 
                                                as.integer(TListw$nWbasis),  
                                                as.integer(nXbasisx), 
                                                as.integer(TListx$nWbasis), 
                                                as.double(TListx$Bvec), 
                                                as.double(Btenswx))
+            #  reformat vector into an array
             DRarraywx <- array(DRarraywx, c(nXbasisw, nXbasisx, TListw$nWbasis))
           }
           #  rescale the inner product
           DRarraywx <- weighti*TListw$factor*TListx$factor*rhoVec[ivar]*
                        DRarraywx/T
-          #  increment the inner product and its transpose for
-          #  the appropriate location in DRarray
-          #  This clumsy code is required because R does not handle
-          #  direct substition of matrices into index subsets.
-          #  If an index set is 1, R converts an array into a matrix.
+          #  increment DRarray
           if (iw == ix) {
-            temp <- DRarray[indw,indw,indthw,drop=FALSE]
-            temp <- temp + 2*DRarraywx
-            DRarray[indw,indw,indthw] <- temp
-            # DRarray[indw,indw,indthw,drop=FALSE] <- 
-            # DRarray[indw,indw,indthw,drop=FALSE] + 2*DRarraywx[,,,drop=FALSE]
+            DRarray[indw,indw,indthw[Bestimw]] <-
+            DRarray[indw,indw,indthw[Bestimw],drop=FALSE] + 
+              2*DRarraywx[,,Bestimw,drop=FALSE]
           } else {
-            temp <- DRarray[indw,indx,indthw,drop=FALSE]
-            temp <- temp + DRarraywx
-            DRarray[indw,indx,indthw] <- temp
-            # DRarray[indw,indx,indthw,drop=FALSE] <-
-            # DRarray[indw,indx,indthw,drop=FALSE] + DRarraywx
-            temp <- DRarray[indx,indw,indthw,drop=FALSE]
-            temp <- temp + aperm(DRarraywx,c(2,1,3))
-            DRarray[indx,indw,indthw] <- temp
-            # DRarray[indw,indx,indthw,drop=FALSE] <-
-            # DRarray[indw,indx,indthw,drop=FALSE] + aperm(DRarraywx,c(2,1,3))
+            DRarray[indw,indx,indthw[Bestimw]] <-
+            DRarray[indw,indx,indthw[Bestimw],drop=FALSE] + 
+              DRarraywx[,,Bestimw,drop=FALSE]
+            DRarraywxt <- aperm(DRarraywx,c(2,1,3))
+            DRarray[indx,indw,indthw[Bestimw]] <-
+            DRarray[indx,indw,indthw[Bestimw],drop=FALSE] + 
+              DRarraywxt[,,Bestimw,drop=FALSE]
           }
+        }
         }
         #  partial derivatives wrt Wcoef for cross-products with D^m
         #  here x <- ivar, Wbasisx is the constant basis, and
@@ -990,7 +903,7 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
         if (TListw$funtype) {
           DRarraywi <- array(inprod.Dbasis.Data2LD(
             Xbasisw,   Xbasisi,
-            TListw$coefnList, coefListi,
+            modelListiw, XListi,
             TListw$nderiv,    nderivi),
             c(nXbasisw,nXbasisi,length(indthw)))
         } else {
@@ -1005,13 +918,14 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
         }
         #  rescale the inner product
         DRarraywi <- weighti*TListw$factor*rhoVec[ivar]*DRarraywi/T
-        temp <- DRarray[indw,indi,indthw,drop=FALSE]
-        temp <- temp - DRarraywi
-        DRarray[indw,indi,indthw] <- temp
-        temp <- DRarray[indi,indw,indthw,drop=FALSE]
-        temp <- temp - aperm(DRarraywi,c(2,1,3))
-        DRarray[indi,indw,indthw] <- temp
+        #  update DRarray
+        DRarray[indw,indi,indthw[Bestimw]] <- 
+        DRarray[indw,indi,indthw[Bestimw],drop=FALSE] - DRarraywi[,,Bestimw,drop=FALSE]
+        DRarraywit <- aperm(DRarraywi,c(2,1,3))
+        DRarray[indi,indw,indthw[Bestimw]] <-
+        DRarray[indi,indw,indthw[Bestimw],drop=FALSE] - DRarraywit[,,Bestimw,drop=FALSE]
       }
+    }
     }
   }
   return(list(Rmat=Rmat, DRarray=DRarray))
@@ -1019,8 +933,8 @@ Data2LD.Rmat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
 
 #  ----------------------------------------------------------------------------
 
-Data2LD.Smat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
-                         ntheta, nrep, nforce) {
+Data2LD.Smat <- function(XbasisList, modelList, rhoVec=rep(0.5,nvar),
+                         nthetaH, nthetaF, nforce, nparams) {
   #  Data2LD  stands for "Data to Linear Dynamics"
   #  Data2LD_S computes the penalty matrix S associated with the forcing
   #  portion of a linear differential operator L, as well as its partial
@@ -1028,15 +942,13 @@ Data2LD.Smat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #  For a single variable whose approximated in terms of an exansion in
   #  terms of a vector \phi of basis functions, S is
   #                 S <- \int [L \phi(t)] U' dt.
-  #  S has dimensions K and NREP, where K is the number of basis
+  #  S has dimensions K and 1, where K is the number of basis
   #  functions in the expansion of the variable, NFORCE is the number of
-  #  forcing functions, and NREP is the number of replications.  The
-  #  forcing functions are assumed to vary from one replication to another.
-  #
+  #  forcing functions.  
   #  If multiple variables are involved, then S is a composite matrix
   #  constructed from inner products and cross-products of the basis
   #  function vectors associate with each variable.  It's dimension will be
-  #  \sum K_i by NFORCE*NREP.
+  #  \sum K_i by NFORCE.
   #
   #  This version approximates the integrals in the penalty terms by using
   #  inprod_basis to compute the cross-product matrices for the
@@ -1047,27 +959,21 @@ Data2LD.Smat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #  for subsequent calls by using the persistent command.  See lines about
   #  560 to 590 for this code.
   #
-  #  This version disassociates coefficient functions from equation
-  #  definitions to allow some coefficients to be used repeatedly and for
-  #  both homogeneous and forcing terms.  It requires an extra argument
-  #  COEFLIST that contains the coefficients and the position of their
-  #  coefficient vectors in vector THETA.
-  #
   #  Arguments:
   #
   #  BASISLIST  A functional data object or a BASIS object.  If so, the
   #               smoothing parameter LAMBDA is set to 0.
   #  MODELLIST   A list of length NVAR. Each list contains a
-  #                struct object with members:
+  #                list object with members:
   #                XList  list List of length number of homogeneous terms
-  #                          Each list contains a struct object with members:
+  #                          Each list contains a list object with members:
   #                          WfdPar  a fdPar object for the coefficient
   #                          variable    the index of the variable
   #                          derivative  the order of its derivative
   #                          npar  if coefficient estimated, its location
   #                                   in the composite vector
   #                FList  list array of length number of forcing terms
-  #                          Each list contains a struct object with members:
+  #                          Each list contains a list object with members:
   #                          AfdPar  an fdPar object for the coefficient
   #                          Ufd     an fd object for the forcing function
   #                          npar  if coefficient estimated, its location
@@ -1076,24 +982,10 @@ Data2LD.Smat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   #                name       a  tag for the variable
   #                nallXterm  the number of homogeneous terms
   #                nallFterm  the number of forcing functions
-  #  COEFLIST   A list of length NCOEF.  Each list contaions a
-  #                a list object with members:
-  #               parvec    a vector of parameters
-  #               estimate  0, held fixed, otherwise, estimated
-  #               coeftype  homogeneous or forcing
-  #               fun       functional basis, fd, or fdPar object,
-  #                            or a struct object for a general function
-  #                            with fields:
-  #                 fd        function handle for evaluating function
-  #                 Dfd       function handle for evaluating
-  #                              partial derivative with respect to parameter
-  #                 more      object providing additional information for
-  #                             evaluating coefficient function
   #  RHOVEC      A value in [0,1].  The data are weighted by P and the
   #               roughness penalty by 1-P.
-  #  NREP        The number of replications of the system.
   #
-  #  Last modified 18 January 2019
+  #  Last modified 3 June 2020
   
   #  ------------------------------------------------------------------------
   #                         Set up analysis
@@ -1117,295 +1009,263 @@ Data2LD.Smat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
   Xrange <- XbasisList[[1]]$rangeval
   T      <- Xrange[2] - Xrange[1]
   
-  coefList$parvec   <- 1
-  coefList$estimate <- 0
-  coefList$fun      <- fd(1,create.constant.basis(Xrange))
+  XListi <- vector("list",1)
+  XListi$parvec   <- 1
+  XListi$estimate <- 0
+  XListi$funobj   <- fd(1,create.constant.basis(Xrange))
   
   #--------------------------------------------------------------------------
   #         Compute the penalty vector  or matrix Smat(theta)
   #--------------------------------------------------------------------------
   
-  #  If there are no forcing functions, return Smat and DSarray as empty
+  #  If there are no forcing functions, return Smat and DSmat as empty
   
   ncoefsum <- sum(ncoefvec)
   if (sum(nforce)==0) {
     Smat <- NULL
-    DSarray <- NULL
-    return(list(Smat <- Smat, DSarray <- DSarray))
+    DSmat <- NULL
+    return(list(Smat <- Smat, DSmat <- DSmat))
   }
   
   #  Loop through variables
   
-  Smat <- matrix(0,sum(ncoefvec),nrep)
+  Smat <- matrix(0,sum(ncoefvec),1)
   m2 <- 0
   for (ivar in 1:nvar) {
-    # print(paste("ivar = ",ivar))
-    modelListi <- modelList[[ivar]]
-    weighti <- modelListi$weight
     m1  <- m2 + 1
     m2  <- m2 + ncoefvec[ivar]
     ind <- m1:m2
-    Xbasisi  <- XbasisList[[ivar]]
-    order   <- modelListi$order
     if (nforce[ivar] > 0) {
+      modelListi <- modelList[[ivar]]
+      weighti  <- modelListi$weight
+      Xbasisi  <- XbasisList[[ivar]]
+      order    <- modelListi$order
       nXbasisi <- ncoefvec[ivar]
-      nXtermi <- modelListi$nallXterm
-      nFtermi <- modelListi$nallFterm
+      nXtermi  <- modelListi$nallXterm
+      nFtermi  <- modelListi$nallFterm
       for (jforce in 1:nFtermi) {
-        # print(paste("jforce = ",jforce))
         # For this forcing term select parameter vectors for 
         # coefficient, factor, known forcing function and whether
         # coefficient has a basis expansion (funtypej = FALSE) or is
         # user-defined (funtypej = TRUE)
         modelListij <- modelListi$FList[[jforce]]
-        TListj      <- getForceTerm(modelListij, coefList)
+        TListj      <- getForceTerm(modelListij)
         #  Crossproducts of homogeneous terms with forcing terms
-        for (iw in 1:nXtermi) {
-          # print(paste("iw = ",iw))
-          # For this homogeneous term obtain variable basis,
-          # coefficient parameter vector and type of coefficient
-          modelListiw <- modelListi$XList[[iw]]
-          TListw  <- getHomoTerm(modelListiw, coefList)
-          indw        <- (ncoefcum[TListw$iv]+1):ncoefcum[TListw$iv+1]
-          nXbasisw    <- ncoefvec[TListw$iv]
-          Xbasisw     <- XbasisList[[TListw$iv]]
-          WfdParw     <- TListw$coefnList$fun
-          if (TListj$funtype || TListw$funtype) {
-            # Either the homogeneous coefficient or the 
-            # forcing coefficient or both are user-defined,
-            # use numerical integration to get inner products
-            Smatjw <- matrix(inprod.basis.Data2LD(
-              Xbasisw, TListj$Ufd, TListw$coefnList, TListj$coefnList,
-              TListw$nderiv, 0), nXbasisw, nrep)
-          } else {
-            # Both coefficients are basis function expansions,
-            # use previously computed inner product values
-            BAtenswj <- modelListi$BAtens[[iw]][[jforce]]
-            # print("BAtenswj")
-            # print(round(BAtenswj,5))
-            Smatjw <- .Call("SmatFnCpp", as.integer(nXbasisw), 
-                                       as.integer(TListw$nWbasis), 
-                                       as.integer(TListj$nUbasis), 
-                                       as.integer(TListj$nAbasis), 
-                                       as.integer(nrep),
-                                       as.double(TListw$Bvec),     
-                                       as.double(TListj$Avec),     
-                                       as.double(TListj$Ucoef),    
-                                       as.double(BAtenswj))
-            Smatjw <- matrix(Smatjw, nXbasisw, nrep)
+        if (nXtermi > 0) {
+          for (iw in 1:nXtermi) {
+            # For this homogeneous term obtain variable basis,
+            # coefficient parameter vector and type of coefficient
+            modelListiw <- modelListi$XList[[iw]]
+            TListw      <- getHomoTerm(modelListiw)
+            indw        <- (ncoefcum[TListw$iv]+1):ncoefcum[TListw$iv+1]
+            nXbasisw    <- ncoefvec[TListw$iv]
+            Xbasisw     <- XbasisList[[TListw$iv]]
+            WfdParw     <- TListw$coefnList$fun
+            if (TListj$funtype || TListw$funtype) {
+              # Either the homogeneous coefficient or the 
+              # forcing coefficient or both are user-defined,
+              # use numerical integration to get inner products
+              Smatjw <- matrix(inprod.basis.Data2LD(Xbasisw, TListj$Ufd, 
+                                                    modelListiw, modelListij,
+                                                    TListw$nderiv, 0), nXbasisw)
+            } else {
+              # Both coefficients are basis function expansions,
+              # use previously computed inner product values
+              BAtenswj <- modelListi$BAtens[[iw]][[jforce]]
+              Smatjw <- .Call("SmatFnCpp", as.integer(nXbasisw), 
+                              as.integer(TListw$nWbasis), 
+                              as.integer(TListj$nUbasis), 
+                              as.integer(TListj$nAbasis), 
+                              as.double(TListw$Bvec),     
+                              as.double(TListj$Avec),     
+                              as.double(TListj$Ucoef),    
+                              as.double(BAtenswj))
+              Smatjw <- matrix(Smatjw, nXbasisw,1)
+            }
+            #  rescale Smatjw
+            Smatjw <- weighti*TListw$factor*TListj$factor*rhoVec[ivar]*Smatjw/T
+            #  update Smat
+            Smat[indw,1] <- Smat[indw,1,drop=FALSE] + Smatjw[,,drop=FALSE]
           }
-          Smatjw <- weighti*TListw$factor*TListj$factor*rhoVec[ivar]*Smatjw/T
-          # print("Smatjw")
-          # print(round(Smatjw,5))
-          temp <- Smat[indw,,drop=FALSE]
-          temp <- temp + Smatjw
-          Smat[indw,] <- temp
         }
         #  Crossproducts of D^m with forcing terms
         if (TListj$funtype) {
-          Smatji <- matrix(inprod.basis.Data2LD(Xbasisi, TListj$Ufd, as.integer(1), 
-                                                TListj$coefnList,order, 0),
-                           nXbasisi,nrep)
+          Smatji <- matrix(inprod.basis.Data2LD(Xbasisi, TListj$Ufd, 
+                                                XListi,  modelListij, 
+                                                order, 0),nXbasisi,1)
         } else {
           BAtensji <- modelListi$BAtens[[nXtermi+1]][[jforce]]
-          # Smatji <- SmatFn(nXbasisi, 1, TListj$nUbasis, TListj$nAbasis, nrep,
-          #                  1, TListj$Avec, TListj$Ucoef, BAtensji)
           Smatji <- .Call("SmatFnCpp", as.integer(nXbasisi), 
-                                     as.integer(1), 
-                                     as.integer(TListj$nUbasis), 
-                                     as.integer(TListj$nAbasis), 
-                                     as.integer(nrep),
-                                     as.double(1.0),     
-                                     as.double(TListj$Avec),     
-                                     as.double(TListj$Ucoef),    
-                                     as.double(BAtensji))
-          Smatji <- matrix(Smatji, nXbasisi, nrep)
+                          as.integer(1), 
+                          as.integer(TListj$nUbasis), 
+                          as.integer(TListj$nAbasis), 
+                          as.double(1.0),     
+                          as.double(TListj$Avec),     
+                          as.double(TListj$Ucoef),    
+                          as.double(BAtensji))
+          Smatji <- matrix(Smatji, nXbasisi, 1)
         }
+        # rescale Smatji
         Smatji <- weighti*TListj$factor*rhoVec[ivar]*Smatji/T
-        # print("Smatji")
-        # print(round(Smatji,5))
-        temp <- Smat[indw,,drop=FALSE]
-        temp <- temp - Smatji
-        Smat[indw,] <- temp
+        #  update Smat
+        Smat[indw,] <- Smat[indw,,drop=FALSE] - Smatji[,,drop=FALSE]
       }
     }
   }
   
   #  ------------------------------------------------------------------------
   #  Compute partial derivatives of Smat if required with respect to theta
-  #  in parvec(1:nthetaL)
+  #  in parvec(1:nparamsL)
   #  ------------------------------------------------------------------------
   
-  if (nrep == 1) {
-    # no replications of forcing terms, DSarray is a matrix
-    # with columns corresponding to parameters theta
-    DSarray <- matrix(0,ncoefsum,ntheta)
-  } else {
-    # DSarray is a 3-D array with second dimension containing theta
-    DSarray <- array(0,c(ncoefsum,ntheta,nrep))
-  }
+  # DSmat is a matrix with second dimension containing theta
+  DSmat <- matrix(0, ncoefsum, nparams)
+  
+  #  ---------------  Computation of DASmat -------------------
+  #  partial derivatives of product of homogeneous terms
+  #  and forcing terms with respect to all non-fixed forcing coefficients
   m2 <- 0
   for (ivar in 1:nvar) {
+    m1 <- m2 + 1
+    m2 <- m2 + ncoefvec[ivar]
     modelListi <- modelList[[ivar]]
     weighti <- modelListi$weight
-    m1   <- m2 + 1
-    m2   <- m2 + ncoefvec[ivar]
     indi <- m1:m2
+    nXbasisi <- ncoefvec[ivar]
+    nXtermi <- modelListi$nallXterm
+    nFtermi <- modelListi$nallFterm
+    Xbasisi <- XbasisList[[ivar]]
+    order <- modelListi$order
     if (nforce[ivar] > 0) {
-      modelListi <- modelList[[ivar]]
-      nXbasisi <- ncoefvec[ivar]
-      nXtermi <- modelListi$nallXterm
-      nFtermi <- modelListi$nallFterm
-      Xbasisi <- XbasisList[[ivar]]
-      order   <- modelListi$order
-      
-      #  ---------------  Computation of DASarray -------------------
-      
-      #  partial derivatives of product of homogeneous terms
-      #  and forcing terms with respect to homogeneous coefficients
-      #  loop through all active forcing terms
       for (jforce in 1:nFtermi) {
         modelListij <- modelListi$FList[[jforce]]
-        TListj  <- getForceTerm(modelListij, coefList)
-        if (TListj$Aestim) {
+        TListj  <- getForceTerm(modelListij)
+        indthj  <- modelListij$index
+        Aestimj <- TListj$estim
+        if (any(Aestimj)) {
           #  This coefficient is estimated, get its details
           #  The index set for the parameters for this forcing
           #  coefficient 
-          indtha    <- TListj$coefnList$index
           #  partial derivatives wrt forcing term coefficients for
           #  those forcing terms requiring estimation of their
           #  coefficients
-          for (iw in 1:nXtermi) {
-            modelListiw <- modelListi$XList[[iw]]
-            TListw    <- getHomoTerm(modelListiw, coefList)
-            indw      <- (ncoefcum[TListw$iv]+1):ncoefcum[TListw$iv+1]
-            nXbasisw  <- ncoefvec[TListw$iv]
-            if (TListw$funtype || TListj$funtype) {
-              # one or more user-defined coefficients
-              DASarrayjw <- 
-                inprod.Dbasis.Data2LD(TListj$Ufd, Xbasisw,  
-                                      TListj$coefnList, TListw$coefnList, 
-                                      0, TListw$nderiv)
-              DASarrayjw <- DASarrayjw[1,,]
-            } else {
-              BAtenswj <- modelListi$BAtens[[iw]][[jforce]]
-              DASarrayjw <- .Call("DASarrayFnCpp", as.integer(nXbasisw), 
-                                                   as.integer(TListw$nWbasis), 
-                                                   as.integer(TListj$nUbasis), 
-                                                   as.integer(TListj$nAbasis), 
-                                                   as.integer(nrep),     
-                                                   as.double(TListw$Bvec),    
-                                                   as.double(TListj$Ucoef),   
-                                                   as.double(BAtenswj))
-              if (nrep > 1) {
-                DASarrayjw <- array(DASarrayjw, c(nXbasisw, nrep, TListj$nAbasis))
+          if (nXtermi > 0) {
+            for (iw in 1:nXtermi) {
+              modelListiw <- modelListi$XList[[iw]]
+              TListw <- getHomoTerm(modelListiw)
+              iv = TListw$iv
+              indw   <- (ncoefcum[iv] + 1):ncoefcum[iv + 1]
+              indthw <- modelListiw$index
+              nXbasisw <- ncoefvec[iv]
+              #  compute the matrix of products of
+              #  partial derivatives of these forcing
+              #  coefficients and homogeneous basis functions
+              if (TListw$funtype || TListj$funtype) {
+                # one or more user-defined coefficients
+                DASmatjw <- inprod.Dbasis.Data2LD(TListj$Ufd, Xbasisw, 
+                                                    modelListij, modelListiw,  
+                                                    0, TListw$nderiv)
+                DASmatjw <- aperm(DASmatjw,c(2,3,1))
               } else {
-                DASarrayjw <- matrix(DASarrayjw, c(nXbasisw, TListj$nAbasis))
+                BAtenswj   <- modelListi$BAtens[[iw]][[jforce]]
+                #  DASmatFnCpp returns a vector
+                DASmatjw <- .Call("DASarrayFnCpp", 
+                                    as.integer(nXbasisw),  
+                                    as.integer(TListw$nWbasis), 
+                                    as.integer(TListj$nUbasis), 
+                                    as.integer(TListj$nAbasis), 
+                                    as.double(TListw$Bvec), 
+                                    as.double(TListj$Ucoef), 
+                                    as.double(BAtenswj))
+                #  reformat the vector into a matrix
+                DASmatjw <- matrix(DASmatjw, nXbasisw, length(indthj))
               }
-            }
-            #  rescale DSarrayjw
-            DASarrayjw <- weighti*TListj$factor*TListw$factor*
-                          rhoVec[ivar]*DASarrayjw/T
-            if (nrep == 1) {
-              DSarray[indw,indtha] <- DSarray[indw,indtha] + DASarrayjw
-            } else {
-              for (irep in 1:nrep) {
-                DSarray[indw,indtha,irep] <- 
-                DSarray[indw,indtha,irep] + DASarrayjw[,,irep]
-              }
-            }
-          }
-          #  partial derivatives of cross-products of D^m
-          #  with forcing terms wrt forcing coefficients
-          if (TListj$funtype) {
-            DASarrayji <- 
-              inprod.Dbasis.Data2LD(TListj$Ufd,  Xbasisi,  
-                                    TListj$coefnList, 1, 0, order)
-            DASarrayji <- DASarrayji[1,,]
-          } else {
-            BAtensij <- modelListi$BAtens[[nXtermi+1]][[jforce]]
-            DASarrayji <- .Call("DASarrayFnCpp", as.integer(nXbasisi), 
-                                                 as.integer(1), 
-                                                 as.integer(TListj$nUbasis), 
-                                                 as.integer(TListj$nAbasis), 
-                                                 as.integer(nrep),     
-                                                 as.double(1.0),    
-                                                 as.double(TListj$Ucoef),   
-                                                 as.double(BAtensij))
-            if (nrep > 1) {
-              DASarrayji <- array(DASarrayji, c(nXbasisi, nrep, TListj$nAbasis))
-            } else {
-              DASarrayji <- matrix(DASarrayji, c(nXbasisi, TListj$nAbasis))
-            }
-          }
-          #  rescale DSarrayji
-          DASarrayji <- weighti*TListj$factor*rhoVec[ivar]*DASarrayji/T
-          if (nrep == 1) {
-            DSarray[indi,indtha] <- 
-            DSarray[indi,indtha] - DASarrayji
-          } else {
-            for (irep in 1:nrep) {
-              DSarray[indi,indtha,irep] <- 
-              DSarray[indi,indtha,irep] - DASarrayji[,,irep]
+              #  rescale DSmatjw
+              DASmatjw <- weighti * TListj$factor * TListw$factor * 
+                rhoVec[ivar] * DASmatjw/T
+              DSmat[indw, indthj[Aestimj]] <- 
+              DSmat[indw, indthj[Aestimj],drop=FALSE] + 
+                DASmatjw[,Aestimj,drop=FALSE]
             }
           }
         }
-        
-        #  ---------------  Computation of DBSarray -------------------
-        
-        #  Crossproducts of homogeneous terms with forcing terms,
-        #  derivative with respect to homogeneous coefficient
-        for (iw in 1:nXtermi) {
-          modelListiw <- modelListi$XList[[iw]]
-          TListw  <- getHomoTerm(modelListiw, coefList)
-          if (TListw$estim) {
-            ivw      <- TListw$iv
-            indw     <- (ncoefcum[ivw]+1):ncoefcum[ivw+1]
-            indthw   <- TListw$coefnList$index
-            nXbasisw <- ncoefvec[ivw]
-            Xbasisw  <- XbasisList[[ivw]]
-            #  compute the matrix or array of products of 
-            #  partial derivatives of these forcing 
-            #  coefficients and homogeneous basis functions
-            if (TListj$funtype || TListw$funtype) {
-              DBSarrayjw <- 
-                array(inprod.Dbasis.Data2LD(Xbasisw, TListj$Ufd,
-                                            TListw$coefnList, TListj$coefnList, 
-                                            TListw$nderiv, 0),
-                      c(nXbasisw,nrep,length(indthw)))
-              if (nrep == 1) {
-                DBSarrayjw <- matrix(DBSarrayjw,length(indw),length(indthw))
+        #  partial derivatives of cross-products of D^m
+        #  with forcing terms wrt forcing coefficients
+        if (TListj$funtype) {
+          DASmatji <- inprod.Dbasis.Data2LD(TListj$Ufd, Xbasisi, 
+                                              modelListij, XListi, 
+                                              0, order)
+        } else {
+          BAtensij <- modelListi$BAtens[[nXtermi + 1]][[jforce]]
+          DASmatji <- .Call("DASarrayFnCpp", 
+                              as.integer(nXbasisi), 
+                              as.integer(1),  
+                              as.integer(TListj$nUbasis), 
+                              as.integer(TListj$nAbasis), 
+                              as.double(1),             
+                              as.double(TListj$Ucoef), 
+                              as.double(BAtensij))
+        }
+        DASmatji <- matrix(DASmatji, nXbasisi, length(indthj))
+        #  rescale DSmatji
+        DASmatji <- weighti * TListj$factor * rhoVec[ivar] * DASmatji/T
+        DSmat[indi, indthj[Aestimj]] <- 
+        DSmat[indi, indthj[Aestimj], drop=FALSE] - 
+            DASmatji[,Aestimj,drop=FALSE]
+      }
+    }
+  }
+  
+  #  ---------------  Computation of DBSmat -------------------
+  #  partial derivatives of product of homogeneous terms and
+  #  forcing terms with respect to all non-fixed homogeneous terms.
+  
+  for (ivar in 1:nvar) {
+    modelListi = modelList[[ivar]]
+    weighti = modelListi$weight
+    nXtermi = modelListi$nallXterm
+    nFtermi = modelListi$nallFterm
+    #  Crossproducts of homogeneous terms with forcing terms,
+    #  derivative with respect to homogeneous coefficient
+    if (nXtermi > 0) {
+      for (iw in 1:nXtermi) {
+        modelListiw <- modelListi$XList[[iw]]
+        TListw <- getHomoTerm(modelListiw)
+        Bestimw <- TListw$estim
+        if (any(Bestimw)) {
+          ivw <- TListw$iv
+          indw <- (ncoefcum[ivw] + 1):ncoefcum[ivw + 1]
+          indthw <- modelListiw$index
+          nXbasisw <- ncoefvec[ivw]
+          Xbasisw <- XbasisList[[ivw]]
+          if (nFtermi > 0) {
+            for (jforce in 1:nFtermi) {
+              modelListij <- modelListi$FList[[jforce]]
+              TListj <- getForceTerm(modelListij)
+              #  compute the matrix of products of 
+              #  partial derivatives of these forcing 
+              #  coefficients and homogeneous basis functions
+              if (TListj$funtype || TListw$funtype) {
+                DBSmatjw <- inprod.Dbasis.Data2LD(
+                  Xbasisw, TListj$Ufd, modelListiw, 
+                  modelListij, TListw$nderiv, 0)
               } else {
-                DBSarrayjw <- as.array(DBSarrayjw)
+                BAtenswj <- modelListi$BAtens[[iw]][[jforce]]
+                DBSmatjw <- .Call("DBSarrayFnCpp", as.integer(nXbasisw),           
+                                    as.integer(TListw$nWbasis), 
+                                    as.integer(TListj$nUbasis), 
+                                    as.integer(TListj$nAbasis), 
+                                    as.double(TListj$Avec), 
+                                    as.double(TListj$Ucoef), 
+                                    as.double(BAtenswj))
               }
-            } else {
-              BAtenswj   <- modelListi$BAtens[[iw]][[jforce]]
-              DBSarrayjw <- .Call("DBSarrayFnCpp", as.integer(nXbasisw), 
-                                  as.integer(TListw$nWbasis), 
-                                  as.integer(TListj$nUbasis), 
-                                  as.integer(TListj$nAbasis),  
-                                  as.integer(nrep),     
-                                  as.double(TListj$Avec),    
-                                  as.double(TListj$Ucoef),   
-                                  as.double(BAtenswj))
-              if (nrep > 1) {
-                DBSarrayjw <- array(DBSarrayjw, c(nXbasisw, TListj$nAbasis, nrep))
-              } else {
-                DBSarrayjw <- matrix(DBSarrayjw, c(nXbasisw, TListj$nAbasis))
-              }
-            }
-            # rescale DSarrayjw
-            factorjw <- weighti*TListj$factor*TListw$factor*
-              rhoVec[ivar]/T
-            DBSarrayjw <- factorjw*DBSarrayjw
-            
-            if (nrep == 1) {
-              DSarray[indw,indthw] <- DSarray[indw,indthw] + DBSarrayjw
-            } else {
-              for (irep in 1:nrep) {
-                DSarray[indw,indthw,irep] <- DSarray[indw,indthw,irep] + 
-                  DBSarrayjw[,,irep]
-              }
+              DBSmatjw <- matrix(DBSmatjw, nXbasisw, length(indthw))
+              # rescale DSmatjw
+              DBSmatjw <- weighti * TListj$factor * TListw$factor *  
+                rhoVec[ivar] * DBSmatjw/T
+              DSmat[indw, indthw[Bestimw]] <- 
+              DSmat[indw, indthw[Bestimw],drop=FALSE] + 
+                DBSmatjw[,,drop=FALSE]
             }
           }
         }
@@ -1413,14 +1273,14 @@ Data2LD.Smat <- function(XbasisList, modelList, coefList, rhoVec=rep(0.5,nvar),
     }
   }
   
-  return(list(Smat=Smat, DSarray=DSarray))
+  return(list(Smat=Smat, DSmat=DSmat))
   
 }
 
 #  ----------------------------------------------------------------------------
 
-Data2LD.ISE <- function(XbasisList, modelList, coefList, coef, 
-                        Rmat, Smat,  nrep, nforce, rhoVec=rep(0.5,nvar)) {
+Data2LD.ISE <- function(XbasisList, modelList, coef, 
+                        Rmat, Smat,  nforce, rhoVec=rep(0.5,nvar)) {
   #  Data2LD  stands for "Data to Linear Dynamics"
   #  Data2LD_ISE computes the value of the penalty term, the integrated
   #  squared difference between the right and left sides of a linear
@@ -1442,28 +1302,22 @@ Data2LD.ISE <- function(XbasisList, modelList, coefList, coef,
   #  These are computed upon the first call to Data2LD, and then retained
   #  for subsequent calls by using the R-Cache command.
   #
-  #  This version disassociates coefficient functions from equation
-  #  definitions to allow some coefficients to be used repeatedly and for
-  #  both homogeneous and forcing terms.  It requires an extra argument
-  #  COEFLIST that contains the coefficients and the position of their
-  #  coefficient vectors in vector THETA.
-  #
   #  Arguments:
   #
   #  BASISLIST  A functional data object or a BASIS object.  If so, the
   #               smoothing parameter LAMBDA is set to 0.
   #
   #  MODELLIST   A list of length NVAR. Each list contains a
-  #                struct object with members:
+  #                list object with members:
   #                XList  list of length number of homogeneous terms
-  #                          Each list contains a struct object with members:
+  #                          Each list contains a list object with members:
   #                          WfdPar  a fdPar object for the coefficient
   #                          variable    the index of the variable
   #                          derivative  the order of its derivative
   #                          npar  if coefficient estimated, its location
   #                                   in the composite vector
   #                FList  list of length number of forcing terms
-  #                          Each list contains a struct object with members:
+  #                          Each list contains a list object with members:
   #                          AfdPar  an fdPar object for the coefficient
   #                          Ufd     an fd object for the forcing function
   #                          npar  if coefficient estimated, its location
@@ -1473,19 +1327,6 @@ Data2LD.ISE <- function(XbasisList, modelList, coefList, coef,
   #                nallXterm  the number of homogeneous terms
   #                nallFterm  the number of forcing functions
   #
-  #  COEFLIST   A list of length NCOEF.  Each list contains a
-  #                a list object with members:
-  #               parvec    a vector of parameters
-  #               estimate  0, held fixed, otherwise, estimated
-  #               coeftype  homogeneous or forcing
-  #               fun       functional basis, fd, or fdPar object,
-  #                            or a struct object for a general function
-  #                            with fields:
-  #                 fd        function handle for evaluating function
-  #                 Dfd       function handle for evaluating
-  #                              partial derivative with respect to parameter
-  #                 more      object providing additional information for
-  #                             evaluating coefficient function
   #  RHOVEC     A vector of length NVAR containing values in [0,1].
   
   #                The data sums of squares are weighted by P and
@@ -1497,12 +1338,10 @@ Data2LD.ISE <- function(XbasisList, modelList, coefList, coef,
   #
   #  SMAT       The penalty matrix for the forcing part of L
   #
-  #  NREP       The number of replications
-  #
   #  NFORCE     The vector containing the number of forcing functions
   #                per variable.
   
-  #  Last modified 18 January 2019
+  #  Last modified 3 June 2020
   
   #  Set up a vector NCOEFVEC containing number of coefficients used
   #  for the expansion of each variable
@@ -1522,61 +1361,58 @@ Data2LD.ISE <- function(XbasisList, modelList, coefList, coef,
   ISE1 <- rep(0,nvar)
   ISE2 <- rep(0,nvar)
   ISE3 <- rep(0,nvar)
-  for (irep in 1:nrep) {
-    ISE1i <- 0
-    ISE2i <- 0
-    ISE3i <- 0
-    coefi <- coef[,irep]
-    for (ivar in 1:nvar) {
-      ISE1i <- ISE1i + t(coefi) %*% Rmat %*% coefi
-      modelListi <- modelList[[ivar]]
-      weighti <- modelListi$weight
-      nforcei  <- nforce[ivar]
-      if (nforcei > 0) {
-        ISE2i <- ISE2i + 2 %*% t(coefi) %*% Smat[,irep]
-        ISE3i <- 0
-        for (jforce in 1:nforcei) {
-          modelListij <- modelListi$FList[[jforce]]
-          TListj  <- getForceTerm(modelListij, coefList)
-          for (kforce in 1:nforcei) {
-            modelListik <- modelListi$FList[[kforce]]
-            TListk    <- getForceTerm(modelListik, coefList)
-            if (TListj$funtype || TListk$funtype) {
-              ISE3i <- 
-                inprod.basis.Data2LD(TListk$Ufd,       TListj$Ufd,
-                                     TListk$coefnList, TListj$coefnList,  
-                                     0,   0)
-            } else {
-              ISE3i <- 0
-              ncum <- cumprod(c(TListk$nAbasis, TListk$nUbasis, 
-                                TListj$nAbasis, TListj$nUbasis))
-              Atensijk  <- modelListi$Atens[[jforce]][[kforce]]
-              for (i in 1:TListj$nUbasis) {
-                for (j in 1:TListj$nAbasis) {
-                  for (k in 1:TListk$nUbasis) {
-                    for (l in 1:TListk$nAbasis) {
-                      ijkl <- (i-1)*ncum[3] + (j-1)*ncum[2] + (k-1)*ncum[1] + l
-                      ISE3i <- ISE3i +
-                        TListj$Ucoef[i,irep]*TListj$Avec[j]*
-                        TListk$Ucoef[k,irep]*TListk$Avec[l]*Atensijk[ijkl]
-                    }
+  ISE1i <- 0
+  ISE2i <- 0
+  ISE3i <- 0
+  for (ivar in 1:nvar) {
+    ISE1i <- ISE1i + t(coef) %*% Rmat %*% coef
+    modelListi <- modelList[[ivar]]
+    weighti <- modelListi$weight
+    nforcei  <- nforce[ivar]
+    if (nforcei > 0) {
+      ISE2i <- ISE2i + 2 %*% t(coef) %*% Smat
+      ISE3i <- 0
+      for (jforce in 1:nforcei) {
+        modelListij <- modelListi$FList[[jforce]]
+        TListj  <- getForceTerm(modelListij)
+        for (kforce in 1:nforcei) {
+          modelListik <- modelListi$FList[[kforce]]
+          TListk    <- getForceTerm(modelListik)
+          if (TListj$funtype || TListk$funtype) {
+            ISE3i <- 
+              inprod.basis.Data2LD(TListk$Ufd,  TListj$Ufd,
+                                   modelListik, modelListij,  
+                                   0,   0)
+          } else {
+            ISE3i <- 0
+            ncum <- cumprod(c(TListk$nAbasis, TListk$nUbasis, 
+                              TListj$nAbasis, TListj$nUbasis))
+            Atensijk  <- modelListi$Atens[[jforce]][[kforce]]
+            for (i in 1:TListj$nUbasis) {
+              for (j in 1:TListj$nAbasis) {
+                for (k in 1:TListk$nUbasis) {
+                  for (l in 1:TListk$nAbasis) {
+                    ijkl <- (i-1)*ncum[3] + (j-1)*ncum[2] + (k-1)*ncum[1] + l
+                    ISE3i <- ISE3i +
+                      TListj$Ucoef[i,1]*TListj$Avec[j]*
+                      TListk$Ucoef[k,1]*TListk$Avec[l]*Atensijk[ijkl]
                   }
                 }
               }
             }
-            ISE3i <- TListj$factor*TListk$factor*rhoVec[ivar]*ISE3i/T
           }
+          ISE3i <- TListj$factor*TListk$factor*rhoVec[ivar]*ISE3i/T
         }
-      } else {
-        ISE2i <- 0
-        ISE3i <- 0
       }
-      ISE1[ivar] <- ISE1[ivar] + weighti*ISE1i
-      ISE2[ivar] <- ISE2[ivar] + weighti*ISE2i
-      ISE3[ivar] <- ISE3[ivar] + weighti*ISE3i
+    } else {
+      ISE2i <- 0
+      ISE3i <- 0
     }
+    ISE1[ivar] <- ISE1[ivar] + weighti*ISE1i
+    ISE2[ivar] <- ISE2[ivar] + weighti*ISE2i
+    ISE3[ivar] <- ISE3[ivar] + weighti*ISE3i
   }
-  ISE <- (sum(ISE1) + sum(ISE2) + sum(ISE3))/nrep
+  ISE <- (sum(ISE1) + sum(ISE2) + sum(ISE3))
   
   return(ISE)
   
@@ -1584,7 +1420,7 @@ Data2LD.ISE <- function(XbasisList, modelList, coefList, coef,
 
 #  ----------------------------------------------------------------------------
 
-inprod.basis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
+inprod.basis.Data2LD <- function(fdobj1, fdobj2, modelList1, modelList2,
                                  Lfdobj1=int2Lfd(0), Lfdobj2=int2Lfd(0),
                                  EPS=1e-6, JMAX=15, JMIN=5) {
   #  INPROD.BASIS.DATA2LD  Computes matrix of inner products of bases by numerical
@@ -1595,19 +1431,26 @@ inprod.basis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
 
   #  Arguments:
   #  FDOBJ1 and FDOBJ2:    These are functional data objects.
-  #  COEFLIST1 and COEFLIST2   List objects for BASIS1 and BASIS2
+  #  MODELLIST1 and MODELLIST2   List objects for BASIS1 and BASIS2
   #  containing members:
-  #               parvec    a vector of parameters
-  #               estimate  0, held fixed, otherwise, estimated
-  #               coeftype  homogeneous or forcing
-  #               fun       functional basis, fd, or fdPar object,
-  #                            or a struct object for a general function
+  #               funobj   functional basis, fd, or fdPar object,
+  #                            or a list object for a general function
   #                            with fields:
   #                 fd       function handle for evaluating function
   #                 Dfd      function handle for evaluating
   #                              derivative with respect to parameter
   #                 more     object providing additional information for
   #                             evaluating coefficient function
+  #               parvec    a vector of parameters
+  #               index     position within parameter vector of parameters
+  #               estimate  0, held fixed, otherwise, estimated
+  #               for homogeneous terms:
+  #                 variable   index of variable in the system
+  #                 derivative order of derivative for the left side
+  #                 factor     constant multiplier of the term
+  #               for forcing terms:
+  #                 Ufd        single function data object for the forcing function
+  #                 factor     constant multiplier of the term
   #  However, these may also be real constants that will be used as fixed coefficients.  An
   #  example is the use of 1 as the coefficient for the left side of the equation.
   #  Lfdobj1 and Lfdobj2:  order of derivatives for inner product of
@@ -1618,110 +1461,51 @@ inprod.basis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
   #  JMIN   minimum number of allowable iterations
 
   #  Return:
-  #  A matrix of NREP1 by NREP2 of inner products for each possible pair
-  #  of functions.
+  #  A matrix of inner products for each possible pair of functions.
 
-  #  Last modified 12 January 2018
+  #  Last modified 3 June 2020
 
   #  Determine where fdobj1 and fdobj2 are basis or fd objects, define
   #  BASIS1 and BASIS2, and check for common range
 
   errwrd <- FALSE
-  if (is.basis(fdobj1)) {
-    basis1  <- fdobj1
-    nbasis1 <- basis1$nbasis - length(basis1$dropind)
-    ndim1   <- nbasis1
-  } else {
-    if (is.fd(fdobj1)) {
-      basis1  <- fdobj1$basis
-      nbasis1 <- basis1$nbasis - length(basis1$dropind)
-      ndim1   <- 1
-    } else {
-      errwrd <- TRUE
-      warning("First argument is not a basis or an fd object.")
-    }
-  }
-
-  if (is.basis(fdobj2)) {
-    basis2  <- fdobj2
-    nbasis2 <- basis2$nbasis - length(basis2$dropind)
-    ndim2   <- nbasis2
-  } else {
-    if (is.fd(fdobj2)) {
-      basis2  <- fdobj2$basis
-      nbasis2 <- basis2$nbasis - length(basis2$dropind)
-      ndim2    <- 1
-    } else {
-      errwrd <- TRUE
-      warning("Second argument is not a basis or an fd object.")
-    }
-  }
-
+  dimResults1 <- find.dim(fdobj1)
+  ndim1  <- dimResults1$ndim
+  basis1 <- dimResults1$basis
+  errwrd <- dimResults1$errwrd
+  dimResults2 <- find.dim(fdobj2)
+  ndim2  <- dimResults2$ndim
+  basis2 <- dimResults2$basis
+  errwrd <- dimResults2$errwrd
   if (errwrd) stop("Terminal error encountered.")
 
   #  get coefficient vectors
 
-  if (is.numeric(coefList1)) {
-    bvec1 <- coefList1
-    conbasis <- create.constant.basis(basis1$rangeval)
-    List1 <- list(fun=conbasis, parvec=bvec1, estimate=FALSE)
-    coefList1 <- List1
-  } else {
-    bvec1 <- coefList1$parvec
-  }
-
-  if (is.numeric(coefList2)) {
-    bvec2 <- coefList2
-    conbasis <- create.constant.basis(basis2$rangeval)
-    List2 <- list(fun=conbasis, parvec=bvec2, estimate=FALSE)
-    coefList2 <- List2
-  } else {
-    bvec2 <- coefList2$parvec
-  }
+  bvec1 <- modelList1$parvec
+  bvec2 <- modelList2$parvec
 
   #  Set up beta functions
 
-  if (!is.basis(coefList1$fun) && !is.fd(coefList1$fun) && !is.fdPar(coefList1$fun)) {
-    type1   <- TRUE
-    betafd1 <- coefList1$fun$fd
-    more1   <- coefList1$fun$more
+  funobj1 <- modelList1$funobj
+  funobj2 <- modelList2$funobj
+  
+  if (!inherits(funobj1, c("basisfd", "fd", "fdPar"))) {
+    userbeta1 <- TRUE
   } else {
-    type1   <- FALSE
-    fdobj   <- coefList1$fun
-    if (is.basis(fdobj)) {
-      betafd1 <- fd(coefList1$parvec,fdobj)
-    }
-    if (is.fd(fdobj)) {
-      betafd1 <- fd(coefList1$parvec, fdobj$basis)
-    }
-    if (is.fdPar(fdobj)) {
-      betafd1 <- fd(coefList1$parvec, fdobj$fd$basis)
-    }
+    userbeta1  <- FALSE
   }
-
-  if (!is.basis(coefList2$fun) && !is.fd(coefList2$fun) && !is.fdPar(coefList2$fun)) {
-    type2   <- TRUE
-    betafd2 <- coefList2$fun$fd
-    more2   <- coefList2$fun$more
+  
+  if (!inherits(funobj2, c("basisfd", "fd", "fdPar"))) {
+    userbeta2 <- TRUE
   } else {
-    type2   <- FALSE
-    fdobj   <- coefList2$fun
-    if (is.basis(fdobj)) {
-      betafd2 <- fd(coefList2$parvec,fdobj)
-    }
-    if (is.fd(fdobj)) {
-      betafd2 <- fd(coefList2$parvec, fdobj$basis)
-    }
-    if (is.fdPar(fdobj)) {
-      betafd2 <- fd(coefList2$parvec, fdobj$fd$basis)
-    }
+    userbeta2  <- FALSE
   }
-
+  
   #  check for any knot multiplicities in either argument
 
   knotmult <- numeric(0)
-  if (type1 == "bspline") knotmult <- knotmultchk(basis1, knotmult)
-  if (type2 == "bspline") knotmult <- knotmultchk(basis2, knotmult)
+  if (basis1$type == "bspline") knotmult <- knotmultchk(basis1, knotmult)
+  if (basis2$type == "bspline") knotmult <- knotmultchk(basis2, knotmult)
 
   #  Modify RNGVEC defining subinvervals if there are any
   #  knot multiplicities.
@@ -1749,48 +1533,22 @@ inprod.basis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
 
     #  set up first iteration
 
+    JMAXP <- JMAX + 1
+    s <- array(0,c(JMAXP,ndim1,ndim2))
+    
     iter  <- 1
     width <- rngi[2] - rngi[1]
-    JMAXP <- JMAX + 1
     h <- rep(1,JMAXP)
     h[2] <- 0.25
-    s <- array(0,c(JMAXP,ndim1,ndim2))
-    #sdim <- length(dim(s))
     x <- rngi
     nx <- 2
     #  first argument
-    if (is.basis(fdobj1)) {
-      if (type1) betamat1  <- matrix(betafd1(x, bvec1, more1),nx,nbasis1)
-      else       betamat1  <- matrix(eval.fd(x, betafd1),     nx,nbasis1)
-      basismat1 <- eval.basis(x, basis1, Lfdobj1) * betamat1
-    } else {
-      if (type1) {
-        betamat1  <- matrix(betafd1(x, bvec1, more1),nx,nbasis1)
-      } else {
-        betamat1  <- matrix(eval.fd(x, betafd1),nx,nbasis1)
-      }
-      basismat1 <- eval.fd(x, basis1, Lfdobj1) * betamat1
-    }
+    termmat1 <- make.termmat(x, fdobj1, modelList1, ndim1, userbeta1)   
     #  second argument
-    if (is.basis(fdobj2)) {
-      if (type2) {
-        betamat2 <- matrix(betafd2(x, bvec2, more2),nx,nbasis2)
-      } else {
-        betamat2 <- matrix(eval.fd(x, betafd2), nx, nbasis2)
-      }
-      basismat2 <- eval.basis(x, basis2, Lfdobj2) * betamat2
-    } else {
-      if (type2) {
-        betamat2 <- matrix(betafd2(x, bvec2, more2),nx,nbasis2)
-      } else {
-        betamat2 <- matrix(eval.fd(x, betafd2),nx,ndim2)
-      }
-      basismat2 <- eval.fd(x, fdobj2, Lfdobj2) * betamat2
-    }
-    iter <- 1
+    termmat2 <- make.termmat(x, fdobj2, modelList2, ndim2, userbeta2)   
     tnm  <- 0.5
     # initialize array s
-    chs <- width*crossprod(basismat1,basismat2)/2
+    chs <- width*crossprod(termmat1,termmat2)/2
     s[1,,] <- chs
 
     #  now iterate to convergence
@@ -1805,40 +1563,11 @@ inprod.basis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
         x   <- seq(rngi[1]+del/2, rngi[2]-del/2, del)
         nx  <- length(x)
       }
-      #  first argument
-      if (is.basis(basis1)) {
-        if (type1) {
-          betamat1  <- matrix(betafd1(x, bvec1, more1),nx,nbasis1)
-        } else {
-          betamat1  <- matrix(eval.fd(x, betafd1),nx,nbasis1)
-        }
-        basismat1 <- eval.basis(x, basis1, Lfdobj1) * betamat1
-      } else {
-        if (type1) {
-          betamat1  <- matrix(betafd1(x, bvec1, more1),nx,nbasis1)
-        } else {
-          betamat1  <- matrix(eval.fd(x, betafd1),nx,nbasis1)
-        }
-        basismat1 <- eval.fd(x, basis1, Lfdobj1) * betamat1
-      }
+      termmat1 <- make.termmat(x, fdobj1, modelList1, ndim1, userbeta1)   
       #  second argument
-      if (is.basis(fdobj2)) {
-        if (type2) {
-          betamat2 <- matrix(betafd2(x, bvec2, more2),nx,nbasis2)
-        } else {
-          betamat2 <- matrix(eval.fd(x, betafd2),nx,nbasis2)
-        }
-        basismat2 <- eval.basis(x, basis2, Lfdobj2) * betamat2
-      } else {
-        if (type2) {
-          betamat2 <- matrix(betafd2(x, bvec2, more2),nx,nbasis2)
-        } else {
-          betamat2 <- matrix(eval.fd(x, betafd2),nx,ndim2)
-        }
-        basismat2 <- eval.fd(x, fdobj2, Lfdobj2) * betamat2
-      }
+      termmat2 <- make.termmat(x, fdobj2, modelList2, ndim2, userbeta2)   
       # update array s
-      chs <- width*crossprod(basismat1,basismat2)/tnm
+      chs <- width*crossprod(termmat1,termmat2)/tnm
       chsold <- matrix(s[iter-1,,],dim(chs))
       s[iter,,] <- (chsold + chs)/2
       # predict next values on fifth or higher iteration
@@ -1892,7 +1621,7 @@ inprod.basis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
 
 #  -------------------------------------------------------------------------------
 
-inprod.Dbasis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
+inprod.Dbasis.Data2LD <- function(fdobj1, fdobj2, modelList1, modelList2,
                                   Lfdobj1=int2Lfd(0), Lfdobj2=int2Lfd(0),
                                   EPS=1e-5, JMAX=16, JMIN=5)
 {
@@ -1906,114 +1635,81 @@ inprod.Dbasis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
   #  trapezoidal rule.
 
   #  Arguments:
-  #  BASIS1 and BASIS2:    These are funmctional basis objects.
-  #  COEFLIST1 and COEFLIST2   List objects for BASIS1 and BASIS2
+  #  FDOBJ1 and FDOBJ2:    These are functional data objects.
+  #  MODELLIST1 and MODELLIST2   List objects for BASIS1 and BASIS2
   #  containing members:
-  #               parvec    a vector of parameters
-  #               estimate  0, held fixed, otherwise, estimated
-  #               coeftype  homogeneous or forcing
-  #               fun       functional basis, fd, or fdPar object,
-  #                            or a struct object for a general function
+  #               funobj   functional basis, fd, or fdPar object,
+  #                            or a list object for a general function
   #                            with fields:
   #                 fd       function handle for evaluating function
   #                 Dfd      function handle for evaluating
   #                              derivative with respect to parameter
   #                 more     object providing additional information for
   #                             evaluating coefficient function
+  #               parvec    a vector of parameters
+  #               index     position within parameter vector of parameters
+  #               estimate  0, held fixed, otherwise, estimated
+  #               for homogeneous terms:
+  #                 variable   index of variable in the system
+  #                 derivative order of derivative for the left side
+  #                 factor     constant multiplier of the term
+  #               for forcing terms:
+  #                 Ufd        single function data object for the forcing function
+  #                 factor     constant multiplier of the term
   #  However, these may also be real constants that will be used as fixed coefficients.  An
   #  example is the use of 1 as the coefficient for the left side of the equation.
-  #  Lfdobj1 and Lfdobj2:  order of derivatives for inner product for
-  #               basis1 and basis2, respectively, or functional data
+  #  Lfdobj1 and Lfdobj2:  order of derivatives for inner product of
+  #               fdobj1 and fdobj2, respectively, or functional data
   #               objects defining linear differential operators
   #  EPS    convergence criterion for relative stop
   #  JMAX   maximum number of allowable iterations
   #  JMIN   minimum number of allowable iterations
-
+  
   #  Return:
-  #  A matrix of NREP1 by NREP2 of inner products for each possible pair
-  #  of functions.
-
-  #  Last modified 12 January 2018
-
+  #  A matrix of inner products for each possible pair of functions.
+  
+  #  Last modified 3 June 2020
+  
   errwrd <- FALSE
-  if (is.basis(fdobj1)) {
-    basis1  <- fdobj1
-    nbasis1 <- basis1$nbasis - length(basis1$dropind)
-    ndim1   <- nbasis1
-  } else {
-    if (is.fd(fdobj1)) {
-      basis1 <- fdobj1
-      ndim1  <- 1
-    } else {
-      errwrd <- TRUE
-      warning("First argument is not a basis object or an fd object.")
-    }
-  }
-
-  if (is.basis(fdobj2)) {
-    basis2  <- fdobj2
-    nbasis2 <- basis2$nbasis - length(basis2$dropind)
-    ndim2   <- nbasis2
-  } else {
-    if (is.fd(fdobj2)) {
-      basis2  <- fdobj2
-      ndim2   <- 1
-    } else {
-      errwrd <- TRUE
-      warning("Second argument is not a basis object or an fd object.")
-    }
-  }
-
+  dimResults1 <- find.dim(fdobj1)
+  ndim1  <- dimResults1$ndim
+  basis1 <- dimResults1$basis
+  errwrd <- dimResults1$errwrd
+  dimResults2 <- find.dim(fdobj2)
+  ndim2  <- dimResults2$ndim
+  basis2 <- dimResults2$basis
+  errwrd <- dimResults2$errwrd
   if (errwrd) stop("Terminal error encountered.")
 
-  bvec1 <- coefList1$parvec
-  bvec2 <- coefList2$parvec
+  #  extract coefficient function coefficients
+  
+  bvec1 <- modelList1$parvec
+  bvec2 <- modelList2$parvec
 
   #  Set up beta functions
-
-  if (!is.basis(coefList1$fun) && !is.fd(coefList1$fun) && !is.fdPar(coefList1$fun)) {
-    type1   <- TRUE
-    betaDfd1 <- coefList1$fun$Dfd
-    more1   <- coefList1$fun$more
+  
+  funobj1 <- modelList1$funobj
+  funobj2 <- modelList2$funobj
+  
+  if (!inherits(funobj1, c("basisfd", "fd", "fdPar"))) {
+    userbeta1 <- TRUE
   } else {
-    type1   <- FALSE
-    fdobj   <- coefList1$fun
-    if (is.basis(fdobj)) {
-      betabasis1 <- fdobj
-    }
-    if (is.fd(fdobj)) {
-      betabasis1 <- fdobj$basis
-    }
-    if (is.fdPar(fdobj)) {
-      betabasis1 <- fdobj$fd$basis
-    }
+    userbeta1  <- FALSE
   }
-
-  if (!is.basis(coefList2$fun) && !is.fd(coefList2$fun) && !is.fdPar(coefList2$fun)) {
-    type2   <- TRUE
-    betafd2 <- coefList2$fun$fd
-    more2   <- coefList2$fun$more
+  
+  if (!inherits(funobj2, c("basisfd", "fd", "fdPar"))) {
+    userbeta2 <- TRUE
   } else {
-    type2   <- FALSE
-    fdobj   <- coefList2$fun
-    if (is.fd(fdobj)) {
-      betafd2 <- fd(coefList2$parvec, fdobj$basis)
-    }
-    if (is.basis(fdobj)) {
-      betafd2 <- fd(coefList2$parvec, fdobj)
-    }
-    if (is.fdPar(fdobj)) {
-      betafd2 <- fd(coefList2$parvec, fdobj$fd$basis)
-    }
+    userbeta2  <- FALSE
   }
-
+  
   npar <- length(bvec1)
 
   #  check for any knot multiplicities in either argument
 
   knotmult <- numeric(0)
-  if (type1 == "bspline") knotmult <- knotmultchk(basis1, knotmult)
-  if (type2 == "bspline") knotmult <- knotmultchk(basis2, knotmult)
+  if (basis1$type == "bspline") knotmult <- knotmultchk(basis1, knotmult)
+  if (basis2$type == "bspline") knotmult <- knotmultchk(basis2, knotmult)
 
   #  Modify RNGVEC defining subinvervals if there are any
   #  knot multiplicities.
@@ -2045,51 +1741,25 @@ inprod.Dbasis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
 
     #  set up first iteration
 
+    JMAXP <- JMAX + 1
+    s <- array(0,c(JMAX,ndim1,ndim2,npar))
+    
     iter  <- 1
     width <- rngi[2] - rngi[1]
-    JMAXP <- JMAX + 1
     h <- rep(1,JMAXP)
     h[2] <- 0.25
     tnm  <- 0.5
     iter <- 1
-    s <- array(0,c(JMAX,ndim1,ndim2,npar))
     sdim <- length(dim(s))
     #  the first iteration uses just the endpoints
     x <- rngi
-
-    #  For first argument:
-    #  basis matrix evaluated with Lfdobj1
-    if (is.basis(basis1)) {
-      basismat1 <- eval.basis(x, basis1, Lfdobj1)
-    } else {
-      basismat1 <- eval.fd(x, basis1, Lfdobj1)
-    }
-    #  matrix of partial derivative values of first coefficient
-    if (type1) {
-      betamat1  <- betaDfd1(x, bvec1, more1)
-    } else {
-      betamat1  <- eval.basis(x, betabasis1, 1)
-    }
-
-    #  For second argument:
-    #  basis matrix evaluated with Lfdobj1
-    if (is.basis(basis2)) {
-      basismat2 <- eval.basis(x, basis2, Lfdobj2)
-    } else {
-      basismat2 <- eval.fd(x, fdobj2, Lfdobj2)
-    }
-    #  vector of values of second coefficient
-    if (type2) {
-      betavec2 <- betafd2(x, bvec2, more2)
-    } else {
-      betavec2 <- eval.fd(x, betafd2)
-    }
-
-    temp2 <- basismat2*rep(betavec2,ndim2)
-    for (k in 1:npar) {
-      temp1 <- basismat1*rep(betamat1[,k],ndim1)
-      chs <- width*crossprod(temp1,temp2)/2
-      s[1,,,k] <- chs
+    #  first argument
+    Dtermarray1 <- make.Dtermarray(x, fdobj1, modelList1, ndim1, userbeta1)   
+    #  second argument
+    termmat2 <- make.termmat(x, fdobj2, modelList2, ndim2, userbeta2)   
+    for (ipar in 1:npar) {
+      chs <- width*crossprod(Dtermarray1[,,ipar],termmat2)/2
+      s[1,,,ipar] <- chs
     }
 
     #  now iterate to convergence
@@ -2102,42 +1772,18 @@ inprod.Dbasis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
         del <- width/tnm
         x   <- seq(rngi[1]+del/2, rngi[2]-del/2, del)
       }
-
-      #  For first argument:
-      #  basis matrix evaluated with Lfdobj1
-      if (is.basis(basis1)) {
-        basismat1 <- as.matrix(eval.basis(x, basis1, Lfdobj1))
-      } else {
-        basismat1 <- as.matrix(eval.fd(x, fdobj1, Lfdobj1))
-      }
-      #  matrix of partial derivative values of first coefficient
-      if (type1) {
-        betamat1  <- betaDfd1(x, bvec1, more1)
-      } else {
-        betamat1  <- eval.basis(x, betabasis1, 1)
-      }
-
-      #  For second argument:
-      #  basis matrix evaluated with Lfdobj1
-      if (is.basis(basis2)) {
-        basismat2 <- as.matrix(eval.basis(x, basis2, Lfdobj2))
-      } else {
-        basismat2 <- as.matrix(eval.fd(x, fdobj2, Lfdobj2))
-      }
-      #  vector of values of second coefficient
-      if (type2) {
-        betavec2 <- betafd2(x, bvec2, more2)
-      } else {
-        betavec2 <- eval.fd(x, betafd2)
-      }
-
-      temp2 <- basismat2*rep(betavec2,ndim2)
-      for (k in 1:npar) {
-        temp1 <- as.matrix(basismat1*betamat1[,k])
-        chs <- width*crossprod(temp1,temp2)/tnm
-        chsold <- s[iter-1,,,k]
+      nx <- length(x)
+      #  first argument
+      Dtermarray1 <- make.Dtermarray(x, fdobj1, modelList1, ndim1, userbeta1)   
+      #  second argument
+      termmat2 <- make.termmat(x, fdobj2, modelList2, ndim2, userbeta2)   
+      for (ipar in 1:npar) {
+        temp <- as.matrix(Dtermarray1[,,ipar])
+        if (nx == 1) temp <- t(temp)
+        chs <- width*crossprod(temp,termmat2)/tnm
+        chsold <- s[iter-1,,,ipar]
         if (is.null(dim(chs))) chs <- matrix(chs,dim(chsold))
-        s[iter,,,k] <- (chsold + chs)/2
+        s[iter,,,ipar] <- (chsold + chs)/2
       }
 
       if (iter >= 5) {
@@ -2191,6 +1837,48 @@ inprod.Dbasis.Data2LD <- function(fdobj1, fdobj2, coefList1, coefList2,
 
 #  -------------------------------------------------------------------------------
 
+getHomoTerm <- function(XtermList) {
+  #  get details for homogeneous term 
+  
+  index     <- XtermList$index       # positions in parameter vector 
+  iv        <- XtermList$variable    # index of the variable in this term
+  factor    <- XtermList$factor      # fixed scale factor
+  nderiv    <- XtermList$derivative  # order of derivative in this term
+  Bvec      <- XtermList$parvec      # parameter vector for forcing coefficient
+  estim     <- XtermList$estimate    # parameter to be estimated? (TRUE/FALSE)
+  nWbasis   <- length(Bvec)          # number of basis functions
+  funtype   <- !(is.basis(XtermList$fun) ||
+                   is.fd(   XtermList$fun) ||
+                   is.fdPar(XtermList$fun))
+  return(list(index=index, iv=iv, factor=factor, Bvec=Bvec, 
+              nWbasis=nWbasis, estim=estim, nderiv=nderiv, funtype=funtype))
+}
+
+#  -------------------------------------------------------------------------------
+
+getForceTerm <- function(FtermList) {
+  #  get details for a forcing term
+  #  last modified 16 April 2020
+  index     <- FtermList$index     # index of coefficient object in coefList
+  factor    <- FtermList$factor    # fixed scale factor 
+  Ufd       <- FtermList$Ufd       # functional data object for forcing term
+  Avec      <- FtermList$parvec    # parameter vector for forcing coefficient
+  estim     <- FtermList$estimate  # parameter to be estimated? (TRUE/FALSE)
+  Ubasis    <- Ufd$basis           # functional basis object for forcing function
+  Ucoef     <- Ufd$coef            # coefficient vector for forcing function
+  nUbasis   <- Ubasis$nbasis       # number of basis fucntions
+  nAbasis   <- length(Avec)        # number of coefficients for B-spline coeff.
+  funtype   <- !(is.basis(FtermList$fun) ||
+                   is.fd(   FtermList$fun) ||
+                   is.fdPar(FtermList$fun))
+  #  return named list
+  return(list(FtermList=FtermList, funtype=funtype, 
+              Ufd=Ufd, Ubasis=Ubasis, Ucoef=Ucoef, nUbasis=nUbasis,
+              estim=estim, Avec=Avec, nAbasis=nAbasis, factor=factor))
+} 
+
+#  -------------------------------------------------------------------------------
+
 knotmultchk <- function(basisobj, knotmult) {
   type <- basisobj$type
   if (type == "bspline") {
@@ -2213,7 +1901,7 @@ knotmultchk <- function(basisobj, knotmult) {
 
 yListCheck <- function(yList, nvar) {
   
-  #  Last modified 7 June 2018
+  #  Last modified 3 June 2020
   
   if (!is.list(yList)) {
     stop("YLIST is not a list vector.")
@@ -2242,7 +1930,6 @@ yListCheck <- function(yList, nvar) {
   for (ivar in 1:nvar) {
     if (is.list(yList[[ivar]])) {
       yListi <- yList[[ivar]]
-      nrep <- dim(as.matrix(yListi$y))[2]
       break
     }
   }
@@ -2265,15 +1952,8 @@ yListCheck <- function(yList, nvar) {
       } else {
         ydim[ivar] <- ydimi[1]
       }
-      #  set up and check NREP
-      nrepi <- ydimi[2]
-      if (nrepi != nrep) {
-        warning("Second dimensions of YList.y are not equal.")
-        errwrd <- TRUE
-      }
       nobs <- nobs + 1
       if (ni != ydimi[1]) {
-        print(c(ni,ydimi[1]))
         warning(paste("Length of ARGVALS and first dimension of Y",
                       "are not equal."))
         errwrd <- TRUE
@@ -2292,7 +1972,7 @@ yListCheck <- function(yList, nvar) {
     stop("One or more terminal stop encountered in YLIST.")
   }
   
-  return(list(nrep=nrep, nvec=nvec, dataWrd=dataWrd))
+  return(list(nvec=nvec, dataWrd=dataWrd))
   
 }
 
@@ -2300,7 +1980,7 @@ yListCheck <- function(yList, nvar) {
 
 inprod.Data2LD <- function(fdobj1, fdobj2=NULL, 
                            Lfdobj1=int2Lfd(0), Lfdobj2=int2Lfd(0),
-                           rng=range1, wtfd=0, returnMatrix=FALSE) {
+                           rng=range1, wtfd=0) {
   #  computes matrix of inner products of functions by numerical
   #    integration using Romberg integration
   
@@ -2328,15 +2008,14 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
   #               enabling this option.
   
   #  Return:
-  #  A matrix of NREP1 by NREP2 of inner products for each possible pair
+  #  A matrix of of inner products for each possible pair
   #  of functions.
   
-  #  Last modified 21 November 2017 by Jim Ramsay
+  #  Last modified 3 June 2020 by Jim Ramsay
   
   #  Check FDOBJ1 and get no. replications and basis object
   
   result1   <- fdchk(fdobj1)
-  nrep1     <- result1[[1]]
   fdobj1    <- result1[[2]]
   coef1     <- fdobj1$coefs
   basisobj1 <- fdobj1$basis
@@ -2363,7 +2042,6 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
   #  Check FDOBJ2 and get no. replications and basis object
   
   result2   <- fdchk(fdobj2)
-  nrep2     <- result2[[1]]
   fdobj2    <- result2[[2]]
   coef2     <- fdobj2$coefs
   basisobj2 <- fdobj2$basis
@@ -2439,7 +2117,7 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
   #  check for either coefficient array being zero
   
   if ((all(c(coef1) == 0) || all(c(coef2) == 0)))
-    return(matrix(0,nrep1,nrep2))
+    return(0)
   
   #  -----------------------------------------------------------------
   #                   loop through sub-intervals
@@ -2451,7 +2129,7 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
   JMIN <-  5
   EPS  <- 1e-4
   
-  inprodmat <- matrix(0,nrep1,nrep2)
+  inprodmat <- 0
   
   nrng <- length(rngvec)
   for (irng  in  2:nrng) {
@@ -2468,17 +2146,17 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
     JMAXP <- JMAX + 1
     h <- rep(1,JMAXP)
     h[2] <- 0.25
-    s <- array(0,c(JMAXP,nrep1,nrep2))
+    s <- matrix(0,JMAXP,1)
     sdim <- length(dim(s))
     #  the first iteration uses just the endpoints
-    fx1 <- eval.fd(rngi, fdobj1, Lfdobj1, returnMatrix)
-    fx2 <- eval.fd(rngi, fdobj2, Lfdobj2, returnMatrix)
+    fx1 <- eval.fd(rngi, fdobj1, Lfdobj1)
+    fx2 <- eval.fd(rngi, fdobj2, Lfdobj2)
     #  multiply by values of weight function if necessary
     if (!is.numeric(wtfd)) {
-      wtd <- eval.fd(rngi, wtfd, 0, returnMatrix)
+      wtd <- eval.fd(rngi, wtfd, 0)
       fx2 <- matrix(wtd,dim(wtd)[1],dim(fx2)[2]) * fx2
     }
-    s[1,,] <- width*matrix(crossprod(fx1,fx2),nrep1,nrep2)/2
+    s[1,1] <- width*crossprod(fx1,fx2)/2
     tnm  <- 0.5
     
     #  now iterate to convergence
@@ -2491,38 +2169,38 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
         del <- width/tnm
         x   <- seq(rngi[1]+del/2, rngi[2]-del/2, del)
       }
-      fx1 <- eval.fd(x, fdobj1, Lfdobj1, returnMatrix)
-      fx2 <- eval.fd(x, fdobj2, Lfdobj2, returnMatrix)
+      fx1 <- eval.fd(x, fdobj1, Lfdobj1)
+      fx2 <- eval.fd(x, fdobj2, Lfdobj2)
       if (!is.numeric(wtfd)) {
-        wtd <- eval.fd(wtfd, x, 0, returnMatrix)
+        wtd <- eval.fd(wtfd, x, 0)
         fx2 <- matrix(wtd,dim(wtd)[1],dim(fx2)[2]) * fx2
       }
-      chs <- width*matrix(crossprod(fx1,fx2),nrep1,nrep2)/tnm
-      s[iter,,] <- (s[iter-1,,] + chs)/2
+      chs <- width*matrix(crossprod(fx1,fx2),1)/tnm
+      s[iter,1] <- (s[iter-1,1] + chs)/2
       if (iter >= 5) {
         ind <- (iter-4):iter
-        ya <- s[ind,,]
-        ya <- array(ya,c(5,nrep1,nrep2))
+        ya <- s[ind,1]
+        ya <- matrix(ya,5,1)
         xa <- h[ind]
         absxa <- abs(xa)
         absxamin <- min(absxa)
         ns <- min((1:length(absxa))[absxa == absxamin])
         cs <- ya
         ds <- ya
-        y  <- ya[ns,,]
+        y  <- ya[ns,1]
         ns <- ns - 1
         for (m in 1:4) {
           for (i in 1:(5-m)) {
             ho      <- xa[i]
             hp      <- xa[i+m]
-            w       <- (cs[i+1,,] - ds[i,,])/(ho - hp)
+            w       <- (cs[i+1,1] - ds[i,1])/(ho - hp)
             ds[i,,] <- hp*w
             cs[i,,] <- ho*w
           }
           if (2*ns < 5-m) {
-            dy <- cs[ns+1,,]
+            dy <- cs[ns+1,1]
           } else {
-            dy <- ds[ns,,]
+            dy <- ds[ns,1]
             ns <- ns - 1
           }
           y <- y + dy
@@ -2537,7 +2215,7 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
         }
         if (crit < EPS && iter >= JMIN) break
       }
-      s[iter+1,,] <- s[iter,,]
+      s[iter+1,1] <- s[iter,1]
       h[iter+1]   <- 0.25*h[iter]
       if (iter == JMAX) warning("Failure to converge.")
     }
@@ -2545,7 +2223,7 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
     
   }
   
-  if((!returnMatrix) && (length(dim(inprodmat)) == 2)) {
+  if (length(dim(inprodmat)) == 2) {
     #  coerce inprodmat to be nonsparse
     return(as.matrix(inprodmat))
   } else {
@@ -2553,6 +2231,112 @@ inprod.Data2LD <- function(fdobj1, fdobj2=NULL,
     return(inprodmat)
   }
   
+}
+
+#  -------------------------------------------------------------------------------
+
+make.termmat <- function(x, fdobj, termList, ndim, userbeta) {
+  #  Matrix termmat is constructed by pointwise multiplication of a matrix
+  #  of values of basis functions (or functions) and a matrix of values
+  #  of a coefficient function.
+  #  the point-wise multiplication requires that the values be formatted
+  #  so that the two matrices have the same dimensions.
+  funobj <- termList$funobj
+  bvec   <- termList$parvec
+  bvec   <- as.matrix(bvec)
+  if (is.basis(fdobj)) {
+    if (userbeta) {
+      betamat <- funobj$fd(x, bvec, funobj$more) %*% matrix(1,1,ndim)
+    } else {
+      betafd   <- funobj
+      if (is.basis(betafd)) betafd <- fd(bvec, betafd) 
+      if (is.fd(betafd))    betafd <- betafd  
+      if (is.fdPar(betafd)) betafd <- fd(bvec, betafd$fd$basis)
+      betamat <- eval.fd(x, betafd)   %*% matrix(1,1,ndim)
+    }
+    basismat <- eval.basis(x, fdobj)
+    termmat <- basismat*betamat
+  } else {
+    if (userbeta) {
+      betamat <- funobj$fd(x, bvec, funobj$more) %*% matrix(1,1,ndim)
+    } else {
+      betafd   <- funobj
+      if (is.basis(betafd)) betafd <- fd(bvec, betafd) 
+      if (is.fd(betafd))    betafd <- betafd  
+      if (is.fdPar(betafd)) betafd <- fd(bvec, betafd$fd$basis)
+      betamat <- eval.fd(x, betafd)   %*% matrix(1,1,ndim)
+    }
+    basismat <- eval.fd(x, fdobj)
+    termmat  <- basismat*betamat
+  }
+  return(termmat)
+}
+
+#  -------------------------------------------------------------------------------
+
+make.Dtermarray <- function(x, fdobj, termList, ndim, userbeta) {
+  #  Matrix termarray is constructed by pointwise multiplication of a matrix
+  #  of values of basis functions (or functions) and a matrix of values
+  #  of a coefficient function derivatives.
+  #  The point-wise multiplication requires that the values be formatted
+  #  so that the two matrices have the same dimensions.
+  nx      <- length(x)
+  npar    <- length(termList$parvec)
+  eyenpar <- diag(rep(1,npar))
+  funobj  <- termList$funobj
+  bvec    <- termList$parvec
+  if (is.basis(fdobj)) {
+    if (userbeta) {
+      Dbetamat <- funobj$Dfd(x, bvec, funobj$more)
+    } else {
+      betaDfd <- funobj
+      if (is.basis(betaDfd)) betaDfd <- fd(eyenpar, betaDfd) 
+      if (is.fd(betaDfd))    betaDfd <- betaDfd  
+      if (is.fdPar(betaDfd)) betaDfd <- fd(eyenpar, betaDfd$fd$basis)
+      Dbetamat <- eval.fd(x, betaDfd) %*% matrix(1,1,ndim)
+    }
+    basismat <- eval.basis(x, fdobj)
+  } else {
+    if (userbeta) {
+      Dbetamat <- funobj$Dfd(x, bvec, funobj$more)
+    } else {
+      betaDfd <- funobj
+      if (is.basis(betaDfd)) betaDfd <- fd(eyenpar, betaDfd) 
+      if (is.fd(betaDfd))    betaDfd <- betaDfd  
+      if (is.fdPar(betaDfd)) betaDfd <- fd(eyenpar, betaDfd$fd$basis)
+      Dbetamat <- eval.fd(x, betaDfd) %*% matrix(1,1,ndim)
+    }
+    basismat <- eval.fd(x, fdobj)
+  }
+  Dtermarray <- array(0,c(nx,ndim,npar))
+  for (ipar in 1:npar) {
+    Dtermarray[,,ipar] <- basismat*matrix(Dbetamat[,ipar],nx,ndim)
+  }
+  return(Dtermarray)
+}
+
+#  -------------------------------------------------------------------------------
+
+find.dim <- function(fdobj) {
+  #  Determine ndim, the number of coefficient functions.
+  #  ndim will normally be one.
+  
+  errwrd <- FALSE
+  if (is.basis(fdobj)) {
+    # if fdobj is a basis, ndim is the number of basis functions
+    basis <- fdobj
+    ndim  <- basis$nbasis
+  } else {
+    if (is.fd(fdobj)) {
+      #  if fdobj is a  <- function(al data object, ndim is 1
+      basis <- fdobj$basis
+      ndim  <- 1
+    } else {
+      errwrd <- TRUE
+      print('First argument is neither a basis object nor an fd object.')
+    }
+  }
+  return(list(ndim=ndim, basis=basis, errwrd=errwrd))
 }
 
 #  -------------------------------------------------------------------------------
@@ -2576,10 +2360,9 @@ fdchk <- function(fdobj) {
   
   coefd <- dim(as.matrix(coef))
   if (length(coefd) > 2) stop("Functional data object must be univariate")
-  nrep     <- coefd[2]
   basisobj <- fdobj$basis
   
-  return(list(nrep, fdobj))
+  return(list(fdobj))
   
 }
 

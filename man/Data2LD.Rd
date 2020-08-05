@@ -87,7 +87,7 @@ COEFLIST that contains the coefficients and the position of their
 coefficient vectors in vector \eqn{latex}{\theta}.
 }
 \usage{
-Data2LD(yList, XbasisList, modelList, coefList, rhoVec = 0.5*rep(1,nvar), 
+Data2LD(yList, XbasisList, modelList, rhoVec = 0.5*rep(1,nvar), 
         summary=TRUE)
 }
 \arguments{
@@ -105,9 +105,6 @@ Data2LD(yList, XbasisList, modelList, coefList, rhoVec = 0.5*rep(1,nvar),
   \item{modelList}{A list each member of which specifies one of linear differential 
   equations in the system.  These can be constructed using function \code{make.Variable}.  
   See the help file for that function for further details.}
-  \item{coefList}{A list each member of which specifies one of the coefficients that 
-  multiply one or more terms in the system. These can be constructed using function 
-  \code{make.Coef}.  See the help file for that function for further details.}
   \item{rhoVec}{A real number in the half-open interval \eqn{[0,T)]}.  
   Its value determines the relative emphasis on fitting the data versus being a 
   solution of the differential equation.  The smaller the value, the more the emphasis 
@@ -151,126 +148,91 @@ Data2LD(yList, XbasisList, modelList, coefList, rhoVec = 0.5*rep(1,nvar),
     J. O. Ramsay and G. Hooker (2017) \emph{Dynamic Data Analysis}. Springer.
 }
 \seealso{
-  \code{\link{make.Model}},
-  \code{\link{coefCheck}}
+  \code{\link{checkModel}},
+  \code{\link{make.Variable}},
+  \code{\link{make.Xterm}},
+  \code{\link{make.Fterm}}
+  \code{\link{checkModel}}
 }
 \examples{
 #
 #  Example 1:  The refinery data
 #
-# The single equation requires two coefficients:
-# 1. A constant coefficient for the speed of reaction
-# 2. A constant coefficient for the single forcing function
-#  Set up the observation times and range 
-TimeData <- RefineryData[,"Time"]
-TimeRng  <- range(TimeData)
-# Defne a constant basis object
-conbasis <- create.constant.basis(TimeRng)
-#  Define the two coefficient functions and
-#  store these in a coefficient function list
-TrayCoefList <- vector("list",2)
-# Both coefficients are estimated and both have initial value 0.
-TrayCoefList[[1]] <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
-TrayCoefList[[2]] <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
-#  Run a check on the coefficient List array, 
-#  which also counts the number of estimated parameters
-TraycoefResult <- coefCheck(TrayCoefList)
-TrayCoefList   <- TraycoefResult$coefList
-TrayNtheta     <- TraycoefResult$ntheta
-print(paste("ntheta = ",TrayNtheta))
-#  Define single homogeneous term with order zero derivative, 
-#  constant multiplier -1, and defined by the first coeffcient
-XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
-XList <- vector("list", 1)
-XList[[1]] <- XTerm
-#  Define the step forcing function for the valve setting
-Valvebreaks <- c(0,67,193)
-Valvenbasis <- 2
-Valvenorder <- 1
-ValveBasis  <- create.bspline.basis(TimeRng, Valvenbasis, Valvenorder, Valvebreaks)
-#  smooth the valve setting data to define the step forcing function
-ValveData <- RefineryData[,"Valve.setting"]
-Valvefd   <- smooth.basis(TimeData, ValveData, ValveBasis)$fd
-#  Define the FList object for the single forcing function
-FTerm <- make.Fterm(ncoef=2, Ufd=Valvefd)
-FList <- vector("list", 1)
-FList[[1]] <- FTerm
-#  Define the single differential equation in the first order model
-TrayVariable <- make.Variable(name="Tray level", order=1, XList=XList, FList=FList)
-#  check the object for internal consistency
-TrayList=vector("list",1)
-TrayList[[1]] <- TrayVariable
-# Construct the basis object for tray variable
+N <- 194
+TimeData <- RefineryData[,1]
+TrayData <- RefineryData[,2]
+ValvData <- RefineryData[,3]
+#  Define the List array containing the tray data
+TrayList <- list(argvals=RefineryData[,1], y=RefineryData[,2])
+TrayDataList  <- vector("list",1)
+TrayDataList[[1]] <- TrayList
+# construct the basis object for tray variable
 #  Order 5 spline basis with four knots at the 67
 #   to allow discontinuity in the first derivative
 #  and 15 knots between 67 and 193
 Traynorder <- 5
 Traybreaks <- c(0, rep(67,3), seq(67, 193, len=15))
 Traynbasis <- 22
-TrayBasis  <- create.bspline.basis(c(0,193), Traynbasis, Traynorder, Traybreaks)
+TrayBasis  <- create.bspline.basis(c(0,193), Traynbasis, Traynorder, 
+                                   Traybreaks)
 #  Set up the basis list for the tray variable
 TrayBasisList    <- vector("list",1)
 TrayBasisList[[1]] <- TrayBasis
-#  check the object for internal consistency
-TrayModelList <- make.Model(TrayBasisList, TrayList, TrayCoefList)
-#  Define the List array containing the tray data
-Tray.dataList <- list(argvals=RefineryData[,"Time"], 
-                   y         =RefineryData[,"Tray.level"])
-TrayDataList  <- vector("list",1)
-TrayDataList[[1]] <- Tray.dataList
-#  Set smoothing constant rho to a value specifying light smoothing
-rhoVec <- 0.5 
+#  Both alpha and beta coefficient functions will be constant.
+#  Define the constant basis
+conbasis <- create.constant.basis(c(0,193))
+betafdPar  <- fdPar(conbasis)
+alphafdPar <- fdPar(conbasis)
+#  Construct a step basis (order 1) and valve level
+Valvbreaks <- c(0,67,193)
+Valvnbasis <- 2
+Valvnorder <- 1
+Valvbasis  <- create.bspline.basis(c(0,193), Valvnbasis, Valvnorder, Valvbreaks)
+#  smooth the valve data
+Valvfd <- smooth.basis(TimeData, ValvData, Valvbasis)$fd
+#  Set up the model list for the tray variable
+#  Define single homogeneous term
+#  Xterm Fields:    funobj     parvec  estimate  variable deriv. factor
+XTerm <- make.Xterm(betafdPar, 0.04,  TRUE,     1,       0,     -1)
+XList <- vector("list", 1)
+XList[[1]] <- XTerm
+#  Define the single forcing term
+#  Fterm Fields:    funobj      parvec  estimate  Ufd      factor
+FTerm <- make.Fterm(alphafdPar, 1.0,    TRUE,     Valvfd,  1)
+FList <- vector("list", 1)
+FList[[1]] <- FTerm
+#  Define the single differential equation in the model
+TrayVariable <- make.Variable(XList=XList, FList=FList, 
+                              name="Tray level", order=1)
+#  Set up the model List array
+TrayModelList <- vector("list",1)
+TrayModelList[[1]] <- TrayVariable
+#  Run a check on TrayVariableList and make the modelList object
+checkModelList <- checkModel(TrayBasisList, TrayModelList, summarywrd=TRUE)
+TrayModelList  <- checkModelList$model
+nparam         <- checkModelList$nparam
 #  Evaluate the fit to the data given the initial parameter estimates (0 and 0)
 #  This also initializes the four-way tensors so that they are not re-computed
 #  for subsquent analyses.
-Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, TrayCoefList, rhoVec)
-#MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
-#DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
+rhoVec <- 0.5
+Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoVec)
+MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
+DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
 #
 #  Example 2:  The head impact data
 #
-#  This is a second order model forced by a single pulse function
-#  All coefficients are positive
-ImpactTime <- RefineryData[,2]  #  time in milliseconds
-Impact     <- RefineryData[,3]  #  time in milliseconds
+ImpactTime <- HeadImpactData[,2]  #  time in milliseconds
+ImpactData <- HeadImpactData[,3]*100  #  acceleration in millimeters/millisecond^2
 ImpactRng  <- c(0,60) # Define range time for estimated model
-# Set up the constant basis
-conbasis <- create.constant.basis(ImpactRng)
-# Define the three constant coefficient functions
-coef1 <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
-coef2 <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
-coef3 <- make.Coef(fun=conbasis, parvec=0, estimate=TRUE)
-#  Set up the coefficient list
-coefList  <- vector("list",3)
-coefList[[1]] <- coef1
-coefList[[2]] <- coef2
-coefList[[3]] <- coef3
-#  check coefficient list
-coefCheckList <- coefCheck(coefList)
-coefList      <- coefCheckList$coefList
-ntheta        <- coefCheckList$ntheta
-print(paste("ntheta = ",ntheta))
-# Define the two terms in the homogeneous part of the equation
-Xterm0 <- make.Xterm(variable=1, derivative=0, ncoef=1, factor=-1)
-Xterm1 <- make.Xterm(variable=1, derivative=1, ncoef=2, factor=-1)
-# Set up the XList vector of length two
-XList <- vector("list",2)
-XList[[1]] <- Xterm0
-XList[[2]] <- Xterm1
+#  Define the List array containing the data
+ImpactDataList1 <- list(argvals=ImpactTime, y=ImpactData)
+ImpactDataList <- vector("list",1)
+ImpactDataList[[1]] <- ImpactDataList1
 # Define a unit pulse function located at times 14-15
 Pulsebasis <- create.bspline.basis(ImpactRng, 3, 1, c(0,14,15,60))
 Pulsefd    <- fd(matrix(c(0,1,0),3,1),Pulsebasis)
-# Define the forcing term
-Fterm      <- make.Fterm(ncoef=3, Ufd=Pulsefd, factor=1)
-# Set up the forcing term list of length one
-FList      <- vector("list",1) 
-FList[[1]] <- Fterm
-#  Define the single differential equation in the model
-ImpactVariable <- make.Variable(order=2, XList=XList, FList=FList)
-#  Define list of length one containing the equation definition
-ImpactList=vector("list",1)
-ImpactList[[1]] <- ImpactVariable
-#  Construct basis for output x(t), multiple knots at times 14 and 15
+#  Construct basis for output x(t), 
+#  multiple knots at times 14 and 15.
 #  Order 6 spline basis, with three knots at the impact point and 
 #  three knots at impact + delta to permit discontinuous first 
 #  derivatives at these points
@@ -278,21 +240,44 @@ knots     <- c(0,14,14,14,15,15,seq(15,60,len=11))
 norder    <- 6
 nbasis    <- 21
 ImpactBasis <- create.bspline.basis(ImpactRng,nbasis,norder,knots)
+#  plot the basis
+ImpactTimefine <- seq(0,60,len=201)
+ImpactBasisfine <- eval.basis(ImpactTimefine, ImpactBasis)
 #  set up basis list
 ImpactBasisList <- vector("list",1)
 ImpactBasisList[[1]] <- ImpactBasis
-#  check the object for internal consistency
-ImpactModelList <- 
-        make.Model(ImpactBasisList, ImpactList, coefList)
-#  Define the List array containing the data
-dataList1 <- list(argvals=ImpactTime, y=Impact)
-dataList <- vector("list",1)
-dataList[[1]] <- dataList1
+# Set up the constant basis, make three coefficients and check them
+conbasis <- create.constant.basis(ImpactRng)
+# Define the terms in the second order linear equation
+# Define the two terms in the homogeneous part of the equation
+#  Xterm Fields:     funobj     parvec  estimate  variable deriv. factor
+Xterm1 <- make.Xterm(conbasis,  1,      TRUE,     1,       0,     -1)
+Xterm2 <- make.Xterm(conbasis,  1,      TRUE,     1,       1,     -1)
+# Set up the XList vector of length two
+XList <- vector("list",2)
+XList[[1]] <- Xterm1
+XList[[2]] <- Xterm2
+# Define the forcing term
+#  Fterm Fields:    funobj    parvec  estimate  Ufd      factor
+Fterm <- make.Fterm(conbasis, 1.0,   TRUE,     Pulsefd, 1)
+# Set up the forcing term list of length one
+FList      <- vector("list",1) 
+FList[[1]] <- Fterm
+#  Define the single differential equation in the model
+ImpactVariable <- make.Variable(name="Impact", order=2, XList=XList, FList=FList)
+#  Define list of length one containing the equation definition
+ImpactModelList=vector("list",1)
+ImpactModelList[[1]] <- ImpactVariable
+#  Check the object for internal consistency and 
+#  set up the model object
+#  Run a check on TrayVariableList and make the modelList object
+checkModelList  <- checkModel(ImpactBasisList, ImpactModelList, summarywrd=TRUE)
+ImpactModelList <- checkModelList$model
+nparam          <- checkModelList$nparam
 # An evaluation of the criterion at the initial values
 rhoVec <- 0.5  #  light smoothing
-#  This command causes Data2LD to set up and save the tensors
-# Data2LDResult <- Data2LD(dataList, ImpactBasisList, 
-#         ImpactModelList, coefList, rhoVec)
-# MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
-# DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
+Data2LDResult <- Data2LD(ImpactDataList, ImpactBasisList, ImpactModelList, rhoVec)
+MSE        <- Data2LDResult$MSE        # Mean squared error for fit to data
+DpMSE      <- Data2LDResult$DpMSE      #  gradient with respect to parameter values
+D2ppMSE    <- Data2LDResult$D2ppMSE    #  Hessian matrix
 }

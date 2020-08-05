@@ -1,4 +1,4 @@
-BAtensorfn <- function(XbasisList, modelList, coefList) {
+BAtensorfn <- function(XbasisList, modelList) {
   #  Set up BATENSORLIST of length NVAR defining products of
   #  derivative terms and forcing terms in LX.
   #  Each list BATENSORLIST[[ivar]] contains a list array of dimensions
@@ -9,7 +9,7 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
   #  basis functions for forcing function j_1 and variable i_1
   #  forcing weight basis for forcing function j_1 and variable i_1.
 
-  #  Last modified 17 January 2019
+  #  Last modified 15 January 2019
 
   rng     <- XbasisList[[1]]$rangeval
   Wbasism <- create.constant.basis(rng)
@@ -20,12 +20,13 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
   BAtensorList <- vector("list", nvar)
   for (ivar in 1:nvar) {
     modelListi <- modelList[[ivar]]
+    #if (!is.null(modelListi$XList)) {
     nallXterm  <- modelListi$nallXterm
     nallFterm  <- modelListi$nallFterm
     Xbasisi    <- XbasisList[[ivar]]
     Xtypei     <- Xbasisi$type
     nXbasisi   <- Xbasisi$nbasis
-    if (nallFterm > 0) {
+    if (!is.null(modelListi$FList)) {
       nX <- nallXterm + 1
       BAtensorListi <- vector("list",nX)
       for (jx in 1:nX) {
@@ -36,9 +37,7 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
       for (jforce in 1:nallFterm) {
         #  store inner products of mth derivative of X bases and forcing functions
         modelListij <- modelListi$FList[[jforce]]
-        ncoefj    <- modelListij$ncoef
-        coefListj <- coefList[[ncoefj]]
-        AfdParj   <- coefListj$fun
+        AfdParj   <- modelListij$fun
         if (is.fdPar(AfdParj) || is.fd(AfdParj) || is.basis(AfdParj)) {
           if (is.basis(AfdParj)) {
             Abasisj <- AfdParj
@@ -55,26 +54,21 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
           nUbasisj  <- Ubasisj$nbasis
           if (Atypej == "const" && Utypej == "bspline" && Xtypei == "bspline") {
             #  both coeffcients are constants, use inprod.Data2LD
-            XWXWmatij <- inprodnow(Xbasisi, Ubasisj, order, 0)
-            # print("XWXWmatij:")
-            # print(round(XWXWmatij,5))
+            XWXWmatij <- inprod(Xbasisi, Ubasisj, order, 0)
             #  store matrix by rows as a vector
             XWXWmatij <- matrix(t(XWXWmatij), nXbasisi*nUbasisj, 1)
-            # print(round(XWXWmatij,5))
           } else {
             #  otherwise use inprod.TPbasis
             XWXWmatij <- inprod.TPbasis(Xbasisi, Wbasism, Ubasisj, Abasisj,
                                         order, 0, 0, 0)
           }
           #  store vector as a sparse one-column matrix
-          BAtensorList[[ivar]][[nX]][[jforce]] <- Matrix(XWXWmatij)
+          BAtensorList[[ivar]][[nX]][[jforce]] <- XWXWmatij
           #  store inner products of right side derivatives of X bases and
           #  forcing functions
           for (iw in 1:nallXterm) {
             modelListiw <- modelListi$XList[[iw]]
-            ncoefw      <- modelListiw$ncoef
-            coefListw   <- coefList[[ncoefw]]
-            WfdParw     <- coefListw$fun
+            WfdParw     <- modelListiw$fun
             if (is.fdPar(WfdParw) || is.fd(WfdParw) || is.basis(WfdParw)) {
               if (is.basis(WfdParw)) {
                 Wbasisw <- WfdParw
@@ -93,11 +87,8 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
               if (Wtypew == "const"   && Atypej == "const" &&
                   Xtypew == "bspline" && Utypej == "bspline") {
                 #  both coeffcients are constants, use inprod.Data2LD
-                XWXWmatwj <- inprodnow(Xbasisw, Ubasisj, derivative, 0)
-                # print("XWXWmatwj:")
-                # print(round(XWXWmatwj,5))
+                XWXWmatwj <- inprod(Xbasisw, Ubasisj, derivative, 0)
                 XWXWmatwj <- matrix(t(XWXWmatwj), nXbasisw*nUbasisj, 1)
-                # print(round(XWXWmatwj,5))
               } else {
                 XWXWmatwj  <- inprod.TPbasis(Xbasisw, Wbasisw,
                                              Ubasisj, Abasisj,
@@ -113,8 +104,10 @@ BAtensorfn <- function(XbasisList, modelList, coefList) {
         }
       }
     }
+    #}
   }
 
   return(BAtensorList)
 
 }
+

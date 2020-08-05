@@ -107,7 +107,7 @@ inprod.TPbasis <- function(basis1,  basis2,  basis3,  basis4,
   for (iter  in  2:JMAX) {
     tnm <- tnm * 2
     del <- width / tnm
-    x   <- rng[1] + (seq(del/2,rng[2],by <- del))
+    x   <- (seq(rng[1] + del/2,rng[2],by <- del))
     nx  <- length(x)
     if ( !is.numeric(wtfd)) {
       wtvec <- eval.fd(wtfd, x)

@@ -1,7 +1,7 @@
 \name{modelList2Vec}
 \alias{modelList2Vec}
 \title{
-  Extract a parameter vector from a modelList object.
+  Extract the master parameter vector from a model list object.
 }
 \description{
   A system of linear differential equations is defined by a list of length equal to the 
@@ -15,20 +15,25 @@
   estimation and returns them as a one-dimensional vector.
 }
 \usage{
-modelList2Vec(modelList, coefList)
+modelList2Vec(modelList, nparam)
 }
 \arguments{
   \item{modelList}{A list object containing the specification of a Data2LD model. 
   Each member of this list contains a list object that defines a single linear 
   differential equation.}
-  \item{coefList}{A list object containing the specifications of one or more 
-  coefficient functions.}                                      
+  \item{nparam}{The total number of parameters in the master parameter vector,
+  which contains all parameters, whether estimated or not.}                                      
 }
 \details{
-  A coefficient specification can be made manually, or can set up in a by a single 
-  invocation of function \code{make.coef}.  Model specifications can also be set 
-  manually, or by an invocation of function \code{make.variable} for each linear 
-  equation in the system.
+  The parameters in the master parameter vector are organized as follows.  
+  First come the parameters defining the homogeneous coefficient functions, in the
+  order in which the appear in the equation system.  Next come the parameters
+  defining the forcing coefficient functions, also in the order in which they 
+  appear.  
+  
+  Normally the user will have a limited need to deal with the master parameter vector.  
+  Both the initial and final parameter values are displayed by the function
+  \code{printModel} in a much more readable form.
 }
 
 \value{

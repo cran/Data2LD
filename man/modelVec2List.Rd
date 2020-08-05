@@ -16,13 +16,12 @@
   requiring estimation by values within a one-dimensional vector.
 }
 \usage{
-modelVec2List(thetavec, coefList)
+modelVec2List(modelList, thetavec)
 }
 \arguments{
+  \item{modelList}{A list object containing the specifications of the model.}                                      
   \item{thetavec}{A numeric vector containing values for all the parameters in a 
   linear differential system that requires estimation.}
-  \item{coefList}{A list object containing the specifications of one or more 
-  coefficient functions.}                                      
 }
 \details{
   A coefficient specification can be made manually, or can set up in a by a single 

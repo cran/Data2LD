@@ -54,7 +54,7 @@
 # models we will set up $\beta_{22}$ as a parameter but fix its value
 # to be 0.
 
-# Last modified 22 January 2019
+# Last modified 17 April 2020
 
 #  Define the problem:
 #  Set up the time span, a set of observation times, and a fine grid for
@@ -83,7 +83,7 @@ stepbasis  <- create.bspline.basis(rng, stepnbasis, steporder, stepbreaks)
 stepcoef   <- c(60,40,80,60)  # target speed for each step
 SetPtfd    <- fd(stepcoef, stepbasis)  # define the set point function
 
-# Set up cruiseCoefList
+# Set up cruiseModelList
 #  The total number of coefficients defining the estimated coefficient 
 #  functions is three because each coefficient function has only one 
 #  coefficient, and only three of them are estimated.
@@ -92,116 +92,6 @@ SetPtfd    <- fd(stepcoef, stepbasis)  # define the set point function
 
 conbasis  <- create.constant.basis(rng)
 confdPar  <- fdPar(conbasis)
-
-#  Define each coefficient.  Their values are those used to generate
-#  the simulated data.  The coefficient in the control equation
-#  for speed is held fixed at 0, leaving four coefficidents to 
-#  estimate.
-
-cruiseCoefListS.S <- make.Coef(confdPar,    1, TRUE)
-cruiseCoefListS.C <- make.Coef(confdPar,  1/4, TRUE)
-cruiseCoefListC.S <- make.Coef(confdPar,    1, TRUE)
-cruiseCoefListC.C <- make.Coef(confdPar,    0, FALSE)
-
-#  set up cruiseCoefList for 4 coefficients and assign coefficients to lists
-
-cruiseCoefList <- list(4,1)
-cruiseCoefList[[1]] <- cruiseCoefListS.S
-cruiseCoefList[[2]] <- cruiseCoefListS.C
-cruiseCoefList[[3]] <- cruiseCoefListC.S
-cruiseCoefList[[4]] <- cruiseCoefListC.C
-
-#  check cruiseCoefList and compute the total number of coefficients
-
-Result   <- coefCheck(cruiseCoefList)
-cruiseCoefList <- Result[[1]] 
-theta    <- Result[[2]]
-ntheta   <- Result[[3]]
-
-#  display the total number of coefficients
-
-print(paste("ntheta =",ntheta))
-print("Initial theta values:")
-print(theta)
-
-# Set up cruiseModelList
-#  The coefficient values used here are for the true system
-#  In this version of the model, there are four estimated parameters
-#  and one fixed parameter.  The fixed parameter is the coefficent
-#  for the controller in the control equation, set to zero to imply
-#  a feed back reaction that is proportional speed.
-
-#  Now set up the struct objects for each of the two cells in 
-#  list cruiseModelList
-
-# List object for the speed equation
-SList.XList = vector("list",2)
-#  Fields:                 variable ncoef derivative factor
-SList.XList[[1]] <- make.Xterm(1,       1,    0,         -1)
-SList.XList[[2]] <- make.Xterm(2,       2,    0,          1)
-SList.FList = NULL
-SList = make.Variable("Speed", 1, SList.XList, SList.FList)
-
-# List object for the control equation
-CList.XList <- vector("list",2)
-CList.XList[[1]] <- make.Xterm(1,       3,    0,         -1)
-CList.XList[[2]] <- make.Xterm(2,       4,    0,          1)
-CList.FList <- vector("list",1)
-#  Fields:                 variable ncoef Ufd      factor
-CList.FList[[1]] <- make.Fterm(3, SetPtfd, 1)
-CList <- make.Variable("Control", 1, CList.XList, CList.FList)
-#  Now set up the Listuct objects for each of the two lists in 
-#  list array cruiseVariableList
-
-#  List array for the whole system
-
-cruiseVariableList <- vector("list",2)
-cruiseVariableList[[1]] <- SList
-cruiseVariableList[[2]] <- CList
-
-# Define cruiseBasisList containing the basis system for each varible.
-# We also have to provide a basis system for each variable that is large
-# enough to allow for any required sharp curvature in the solution to the
-# differential equation system.  
-#
-# First we set the order of the B-spline basis to 5 so that the first 
-# derivative will be smooth when working with a second order derivative in
-# the penalty term.  Then we position knots at 41 positions where we willl
-# simulate noisy observations.  We use the same basis for both variables
-# and load it into a list array of length 2.
-
-cruiseBasisList <- vector("list",2)
-
-delta <- 2*(1:10)
-breaks   <- c(0, delta, 20, 20+delta, 40, 40+delta, 60, 60+delta)
-nbreaks  <- length(breaks)
-
-nSorder <- 5
-nSbasis <- nbreaks + nSorder - 2
-Sbasis  <- create.bspline.basis(c(0,80), nSbasis, nSorder, breaks)
-cruiseBasisList[[1]] <- Sbasis
-
-nCorder <- 4
-nCbasis <- nbreaks + nCorder - 2
-Cbasis  <- create.bspline.basis(c(0,80), nCbasis, nCorder, breaks)
-cruiseBasisList[[2]] <- Cbasis
-
-#  check the system specification for consistency
-
-cruiseModelList <- make.Model(cruiseBasisList, cruiseVariableList, cruiseCoefList)
-
-# Solving the equations for known parameter values and initial conditions.
-# In order to simulate data, we need to know the true values of .S(t).
-# and .C(t). at the time points where the process is observed.  We also 
-# need tospecify the initial state of the system at time 0, which we define 
-# to be zero for both variables.  We get the solution by using an initial 
-# value approximation algorithm, which is here the Runge-Kutta fourth order
-# method coded in Matlab's function |ode45|.
-# The function |cruuise1| evaluates the right side of the equations at a 
-# set of time values.  
-#
-# We first have a look at the solution at a fine mesh of values by solving
-# the equation for the points in |tfine| and plotting them
 
 # Solving the equations for known parameter values and initial conditions.
 # In order to simulate data, we need to know the true values of .S(t).
@@ -284,14 +174,87 @@ cruiseDataList <- vector("list",2)
 cruiseDataList[[1]] <- cruiseDataList1
 cruiseDataList[[2]] <- cruiseDataList2
 
+# Define cruiseBasisList containing the basis system for each varible.
+# We also have to provide a basis system for each variable that is large
+# enough to allow for any required sharp curvature in the solution to the
+# differential equation system.  
+#
+# First we set the order of the B-spline basis to 5 so that the first 
+# derivative will be smooth when working with a second order derivative in
+# the penalty term.  Then we position knots at 41 positions where we willl
+# simulate noisy observations.  We use the same basis for both variables
+# and load it into a list array of length 2.
+
+cruiseBasisList <- vector("list",2)
+
+delta <- 2*(1:10)
+breaks   <- c(0, delta, 20, 20+delta, 40, 40+delta, 60, 60+delta)
+nbreaks  <- length(breaks)
+
+nSorder <- 5
+nSbasis <- nbreaks + nSorder - 2
+Sbasis  <- create.bspline.basis(c(0,80), nSbasis, nSorder, breaks)
+cruiseBasisList[[1]] <- Sbasis
+
+nCorder <- 4
+nCbasis <- nbreaks + nCorder - 2
+Cbasis  <- create.bspline.basis(c(0,80), nCbasis, nCorder, breaks)
+cruiseBasisList[[2]] <- Cbasis
+
+#  Now set up the list objects for each of the two cells in 
+#  list cruiseModelList
+
+# List object for the speed equation: A term for speed and a term for control, but no forcing
+
+SList.XList = vector("list",2)
+#  Fields:                     funobj    parvec  estimate  variable deriv. factor
+SList.XList[[1]] <- make.Xterm(confdPar, 1,      TRUE,     1,       0,     -1)
+SList.XList[[2]] <- make.Xterm(confdPar, 1/4,    TRUE,     2,       0,      1)
+SList.FList = NULL
+SList = make.Variable("Speed", 1, SList.XList, SList.FList)
+
+# List object for the control equation:  a term for speed, and a zero-multiplied term for control
+# plus a term for the forcing function SetPtfd
+
+CList.XList <- vector("list",2)
+#  Fields:                     funobj    parvec  estimate  variable deriv. factor
+CList.XList[[1]] <- make.Xterm(confdPar, 1,      TRUE,     1,       0,     -1)
+CList.XList[[2]] <- make.Xterm(confdPar, 0,      FALSE,    2,       0,      1)
+CList.FList <- vector("list",1)
+#  Fields:                     funobj    parvec  estimate  Ufd      factor
+CList.FList[[1]] <- make.Fterm(confdPar, 1,      TRUE,     SetPtfd, 1)
+CList <- make.Variable("Control", 1, CList.XList, CList.FList)
+#  Now set up the Listuct objects for each of the two lists in 
+#  list array cruiseVariableList
+
+#  List array for the whole system
+
+cruiseModelList <- vector("list",2)
+cruiseModelList[[1]] <- SList
+cruiseModelList[[2]] <- CList
+
+#  check the system specification for consistency
+
+cruiseModelCheckList <- checkModel(cruiseBasisList, cruiseModelList)
+cruiseModelList <- cruiseModelCheckList$modelList
+nparam <- cruiseModelCheckList$nparam
+
+print(paste("total number of parameters = ", nparam))
+
 # A preliminary evaluation of the function and its derivatives
 
 rhoVec <- 0.5*matrix(1,1,2)
 
-Data2LDList <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList, cruiseCoefList, rhoVec)
+Data2LDList <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList, rhoVec)
 
 print(Data2LDList$MSE)
 print(Data2LDList$DpMSE)
+print(Data2LDList$D2ppMSE)
+
+
+#  Note that, for the parameter that is fixed, the gradient element is 0, and
+#  the row and column of the hessian matrix are 0 except for the diagonal
+#  value, which is 1.
 
 #  Evaluate at the corrent parameter values, which in this case are
 #  the right values since the data are without error
@@ -321,13 +284,13 @@ rhoMat  <- matrix(exp(Gvec)/(1+exp(Gvec)),nrho,2)
 dfesave <- matrix(0,nrho,1)
 gcvsave <- matrix(0,nrho,1)
 MSEsave <- matrix(0,nrho,2)
-thesave <- matrix(0,nrho,ntheta)
+thesave <- matrix(0,nrho,nparam)
 
 conv    <- 1e-4  #  convergence criterion for mean square error values
 iterlim <- 20    #  limit on number of iterations
 dbglev  <-  1    #  displays one line of results per iteration
 
-cruiseCoefList.opt <- cruiseCoefList  #  initialize the optimizing coefficient values
+cruiseModelList.opt <- cruiseModelList  #  initialize the optimizing coefficient values
 
 #  loop through rho values, with a pause after each value
 
@@ -335,13 +298,12 @@ for (irho in 1:nrho) {
   rhoVeci <- rhoMat[irho,]
   print(paste(" ------------------  rhoVeci <- ", round(rhoVeci[1],4), 
               " ------------------"))
-  Data2LDOptList <- Data2LD.opt(cruiseDataList, cruiseBasisList, cruiseModelList, cruiseCoefList.opt, 
+  Data2LDOptList <- Data2LD.opt(cruiseDataList, cruiseBasisList, cruiseModelList.opt, 
                                 rhoVeci, conv, iterlim, dbglev)
-  theta.opti     <- Data2LDOptList$theta  # optimal parameter values
-  cruiseCoefList.opti  <- modelVec2List(theta.opti, cruiseCoefList)  # store in cruiseCoefList
+  theta.opti <- Data2LDOptList$theta  # optimal parameter values
+  cruiseModelList.opt <- modelVec2List(cruiseModelList, theta.opti) 
   #  evaluate fit at optimal values and store the results
-  Data2LDList    <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList, cruiseCoefList.opti, 
-                            rhoVeci)
+  Data2LDList    <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList.opt, rhoVeci)
   thesave[irho,]  <- theta.opti
   dfesave[irho]   <- Data2LDList$df
   gcvsave[irho]   <- Data2LDList$gcv
@@ -353,7 +315,6 @@ for (irho in 1:nrho) {
   msex2           <- mean((x2vec - controlResult$y)^2)
   MSEsave[irho,1] <- msex1
   MSEsave[irho,2] <- msex2
-  cruiseCoefList.opt    <- cruiseCoefList.opti  #  update the optimizing coefficient values
 }
 
 ind <- 1:nrho
@@ -369,23 +330,22 @@ matplot(rhoMat[ind,1], thesave[ind,], type="b", xlab="rho", ylab="theta(rho)")
 rho.opt   <- rhoMat[nrho,]
 theta.opt <- thesave[nrho,]
 
-#  convert the optimal parameter values to optimal cruiseCoefList
+#  convert the optimal parameter values to optimal cruiseModelList
 
-cruiseCoefList.opt <- modelVec2List(theta.opt, cruiseCoefList)
+cruiseModelList.opt <- modelVec2List(cruiseModelList, theta.opt)
 
 #  evaluate the solution at the optimal solution
 
-DataLDList <- Data2LD(cruiseDataList, cruiseBasisList, 
-                      cruiseModelList, cruiseCoefList.opt, rho.opt)
+DataLDList <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList.opt, rho.opt)
 
 #  display parameters with 95% confidence limits
 
 stddev.opt <- sqrt(diag(DataLDList$Var.theta))
 
-theta.tru <- c(1, 1/4,  1)
+theta.tru <- c(1, 1/4,  1, 0,  1)
 
 print("    True      Est.      Std. Err. Low CI    Upr CI:")
-for (i in 1:ntheta) {
+for (i in 1:nparam) {
   print(round(c(theta.tru[i], 
                 theta.opt[i], 
                 stddev.opt[i], 
@@ -410,7 +370,7 @@ cruiseDataList1 <- cruiseDataList[[1]]
 plot(tfine, Xvec1, type="l", xlim=c(0,80), ylim=c(0,100), 
      ylab="Speed",
      main=paste("RMSE =",round(sqrt(MSEsave[3,1]),4)))
-lines(tfine, ytrue[,1], lty=2)
+lines(tfine, ytrue[,2], lty=2)
 points(cruiseDataList1$argvals, cruiseDataList1$y, pch="o")
 lines(tfine, Uvec, lty=2)
 
@@ -418,6 +378,7 @@ cruiseDataList2 <- cruiseDataList[[2]]
 plot(tfine, Xvec2, type="l", xlim=c(0,80), ylim=c(0,400),
      xlab="Time (sec)", ylab="Control",
      main=paste("RMSE =",round(sqrt(MSEsave[3,2]),4)))
-lines(tfine, ytrue[,2], lty=2)
+lines(tfine, ytrue[,3], lty=2)
 points(cruiseDataList2$argvals, cruiseDataList2$y, pch="o")
+
 

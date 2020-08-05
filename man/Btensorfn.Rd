@@ -27,23 +27,23 @@
   for this reason.
 }
 \usage{
-Btensorfn(XbasisList, modelList, coefList)
+Btensorfn(XbasisList, modelList)
 }
 \arguments{
-  \item{XbasisList}{A list object of length equal to the number of equations in the 
-  system.  Each member of this list is in turn a list specifying the structure of the 
-  equation.}
+  \item{XbasisList}{A list object of length equal to the number of equations 
+  in the system.  Each member of this list is a functional basis object used to
+  approximate the values of the corresponding variable.}
   \item{modelList}{A list object containing the specification of a Data2LD model. 
   Each member of this list contains a list object that defines a single linear 
   differential equation.}
-  \item{coefList}{A list object containing the specifications of one or more 
-  coefficient functions.}                                      
 }
 \details{
-  A coefficient specification can be made manually, or can set up in a by a single 
-  invocation of function \code{make.coef}.  Variable specifications can also be set 
-  manually, or by an invocation of function \code{make.variable} for each linear 
-  differential equation in the system.
+  Variable specifications can be set by an invocation of function
+  \code{make.Variable} for each linear differential equation in the system.
+  Functions \code{Atensorfn}, \code{BAtensorfn} and \code{Btensorfn} will not
+  normally be required by users since they are invoked automatically with the
+  function \code{checkModel}, which is required to be invoked before the
+  analysis of the data.
 }
 \value{
   A list object of length equal to the number of variables in the system.  

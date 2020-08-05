@@ -1,4 +1,15 @@
+#  Analysis  of the refinery data
+#  Dx(t) = -beta x + alpha u(t) 
+
 #  set up the 194 by 3 matrix of refinery data
+
+#  load all objects up to but not including the first call to Data2LD
+
+load("refinery.RData")
+
+#  load the data to be analyzed
+
+load("../Data/RefineryData.rda")
 
 N <- 194
 TimeData <- RefineryData[,1]
@@ -11,64 +22,11 @@ lines(c(67,67), c(0,4.0), type="l")
 plot(TimeData, ValvData, type="p")
 lines(c(67,67), c(0,0.5), type="l")
 
-#  Construct a step basis (order 1) and valve level
+#  Define the List array containing the tray data
 
-Valvbreaks <- c(0,67,193)
-Valvnbasis <- 2
-Valvnorder <- 1
-Valvbasis  <- create.bspline.basis(c(0,193), Valvnbasis, Valvnorder, Valvbreaks)
-
-par(mfrow=c(2,1))
-plot(Valvbasis, xlab="Time", ylab="B-spline basis functions")
-#  smooth the valve data
-Valvfd <- smooth.basis(TimeData, ValvData, Valvbasis)$fd
-#  plot the smooth and the data
-plotfit.fd(ValvData, TimeData, Valvfd, xlab="Time", ylab="Valve setting")
-
-#  Define the coefficient List array 
-#  Both alpha and beta coefficient functions will be constant.
-#  Define the constant basis
-conbasis <- create.constant.basis(c(0,193))
-#  Make the two coefficient function lists and
-#  store these in a coefficient function list
-#  Use positive random initial values for testing purposes
-TrayCoefList <- vector("list",2)
-TrayCoefList[[1]] <- make.Coef(fun=conbasis, parvec=exp(rnorm(1)), 
-                               estimate=TRUE)
-TrayCoefList[[2]] <- make.Coef(fun=conbasis, parvec=exp(rnorm(1)), 
-                               estimate=TRUE)
-
-#  Run a check on the coefficient List array, 
-#  which also counts the number of estimated parameters
-
-TraycoefResult <- coefCheck(TrayCoefList)
-TrayCoefList   <- TraycoefResult$coefList
-TrayNtheta     <- TraycoefResult$ntheta
-
-#  Set up the model list for the tray variable
-
-#  Define single homogeneous term
-
-XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, 
-                    factor=-1, name="reaction")
-XList <- vector("list", 1)
-XList[[1]] <- XTerm
-
-#  Define the single forcing term
-
-FTerm <- make.Fterm(ncoef=2, Ufd=Valvfd, name="Valve")
-FList <- vector("list", 1)
-FList[[1]] <- FTerm
-
-#  Define the single differential equation in the model
-
-TrayVariable <- make.Variable(XList=XList, FList=FList, 
-                              name="Tray level", order=1)
-
-#  Set up the model List array
-
-TrayVariableList <- vector("list",1)
-TrayVariableList[[1]] <- TrayVariable
+TrayList <- list(argvals=RefineryData[,1], y=RefineryData[,2])
+TrayDataList  <- vector("list",1)
+TrayDataList[[1]] <- TrayList
 
 # construct the basis object for tray variable
 #  Order 5 spline basis with four knots at the 67
@@ -80,7 +38,6 @@ Traybreaks <- c(0, rep(67,3), seq(67, 193, len=15))
 Traynbasis <- 22
 TrayBasis  <- create.bspline.basis(c(0,193), Traynbasis, Traynorder, 
                                    Traybreaks)
-
 #  plot the basis
 
 par(mfrow=c(1,1))
@@ -91,25 +48,75 @@ plot(TrayBasis, xlab="Time", ylab="B-spline basis functions")
 TrayBasisList    <- vector("list",1)
 TrayBasisList[[1]] <- TrayBasis
 
-#  Run a check on TrayVariableList and make the modelList object
+#  Both alpha and beta coefficient functions will be constant.
+#  Define the constant basis
 
-TrayModelList <- make.Model(TrayBasisList, TrayVariableList, TrayCoefList)
+conbasis   <- create.constant.basis(c(0,193))
+confd      <- fd(0,conbasis)
+betafdPar  <- fdPar(confd)
+alphafdPar <- fdPar(confd)
 
-#  Define the List array containing the tray data
+#  Construct a step basis (order 1) and valve level
 
-TrayList <- list(argvals=RefineryData[,1], y=RefineryData[,2])
-TrayDataList  <- vector("list",1)
-TrayDataList[[1]] <- TrayList
+Valvbreaks <- c(0,67,193)
+Valvnbasis <- 2
+Valvnorder <- 1
+Valvbasis  <- create.bspline.basis(c(0,193), Valvnbasis, Valvnorder, Valvbreaks)
+#  smooth the valve data 
+Valvfd <- smooth.basis(TimeData, ValvData, Valvbasis)$fd
+
+par(mfrow=c(2,1))
+plot(Valvbasis, xlab="Time", ylab="B-spline basis functions")
+#  plot the smooth and the data
+plotfit.fd(ValvData, TimeData, Valvfd, xlab="Time", ylab="Valve setting")
+
+#  Set up the model list for the tray variable
+
+#  Define single homogeneous term
+
+#  Xterm Fields:    funobj     parvec  estimate  variable deriv. factor
+XTerm <- make.Xterm(betafdPar, 0.04,  TRUE,     1,       0,     -1)
+XList <- vector("list", 1)
+XList[[1]] <- XTerm
+
+#  Define the single forcing term
+
+#  Fterm Fields:    funobj      parvec  estimate  Ufd      factor
+FTerm <- make.Fterm(alphafdPar, 1.0,    TRUE,     Valvfd,  1)
+FList <- vector("list", 1)
+FList[[1]] <- FTerm
+
+#  Define the single differential equation in the model
+
+TrayVariable <- make.Variable(XList=XList, FList=FList, 
+                              name="Tray level", order=1)
+
+#  Set up the model List array
+
+TrayModelList <- vector("list",1)
+TrayModelList[[1]] <- TrayVariable
+
+#  Run a check on TrayModelList and make the modelList object.
+
+checkModelList <- checkModel(TrayBasisList, TrayModelList)
+TrayModelList  <- checkModelList$model
+nparam         <- checkModelList$nparam
+
+print(paste("Number of parameters =",nparam))
 
 #  Evaluate the fit to the data given the initial parameter estimates (0 and 0)
 #  This also initializes the four-way tensors so that they are not re-computed
 #  for subsquent analyses.
 
 rhoVec <- 0.5
-Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, 
-                       TrayCoefList, rhoVec)
+
+Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoVec)
+
 MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
 DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
+
+MSE
+DMSE
 
 ## Optimization of the criterion
 
@@ -123,21 +130,20 @@ rhoMat   <- as.matrix(exp(gammavec)/(1+exp(gammavec)),nrho,1)
 dfesave  <- matrix(0,nrho,1)
 gcvsave  <- matrix(0,nrho,1)
 MSEsave  <- matrix(0,nrho,1)
-thesave  <- matrix(0,nrho,TrayNtheta)
+ISEsave  <- matrix(0,nrho,1)
+thesave  <- matrix(0,nrho,nparam)
 
-TrayCoefList.opt <- TrayCoefList
+TrayModelList.opt <- TrayModelList
 
 for (irho in 1:nrho) {
   rhoi <- rhoMat[irho]
   print(paste("rho <- ",round(rhoi,5)))
   Data2LDResult <- Data2LD.opt(TrayDataList, TrayBasisList, 
-                               TrayModelList,  TrayCoefList.opt, 
-                               rhoi, convrg, 
+                               TrayModelList,  rhoi, convrg, 
                                iterlim, dbglev)
   theta.opti <- Data2LDResult$thetastore
-  TrayCoefList.opti <- modelVec2List(theta.opti, TrayCoefList)
-  Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, 
-                         TrayCoefList.opti, rhoi)
+  TrayModelList.opti <- modelVec2List(TrayModelList, theta.opti)
+  Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoi)
   MSE       <- Data2LDList$MSE 
   df        <- Data2LDList$df
   gcv       <- Data2LDList$gcv 
@@ -147,21 +153,33 @@ for (irho in 1:nrho) {
   dfesave[irho]   <- df
   gcvsave[irho]   <- gcv
   MSEsave[irho]   <- MSE
+  ISEsave[irho]   <- ISE
 }
 
-# print degrees of freedom and gcv values
+# print degrees of freedom and gcv values, values of
+# mean squared error for data fitting, and 
+# integrated squared error for fidelity to the 
+# differential equation
 
-print("    rho      df         gcv,       MSE")
+print("    rho      df         gcv,       MSE       ISE")
 for (irho in 1:nrho) {
-  print(round(c(rhoMat[irho,1], dfesave[irho], gcvsave[irho], MSEsave[irho]),5))
+  print(round(c(rhoMat[irho,1], dfesave[irho], gcvsave[irho], 
+                MSEsave[irho], ISEsave[irho]),5))
 }
 
-## Evaluate the fit for (parameter values at highest rho value
+#  plot the evolution of the parameters over the values of rho
+
+par(mfrow=c(2,1))
+plot(rhoMat, thesave[,1], type <- "b", lwd=2, 
+     xlab="rho", ylab="rate parameter")
+plot(rhoMat, thesave[,2], type <- "b", lwd=2, 
+     xlab="rho", ylab="forcing parameter")
+
+# Evaluate the fit for (parameter values at highest rho value
 
 irho <- 8  #  evaluate solution for (highest rho value
-TrayCoefList <- modelVec2List(thesave[irho,], TrayCoefList)
-Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, 
-                       TrayCoefList, rhoMat[irho,])
+TrayModelList <- modelVec2List(TrayModelList, thesave[irho,])
+Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoMat[irho,])
 MSE       <- Data2LDList$MSE 
 df        <- Data2LDList$df
 gcv       <- Data2LDList$gcv 
@@ -171,12 +189,12 @@ print(paste("MSE = ", round(MSE,5)))
 print(paste("df  = ", round(df,1)))
 print(paste("gcv = ", round(gcv,5)))
 
+# plot fit of solution to data
+
 Trayfd   <- Data2LDList$XfdParList[[1]]$fd
 tfine    <- seq(0,193,len=101)
 Trayfine <- eval.fd(tfine, Trayfd)
 Ufine    <- eval.fd(tfine, Valvfd)
-
-# plot fit of solution to data
 
 par(mfrow=c(1,1))
 plot(tfine, Trayfine, type="l", lwd=2, 
@@ -204,10 +222,3 @@ thetaDN <- theta - 2*stderr
 print(round(c(theta[1], thetaDN[1], thetaUP[1], stderr[1]),4))
 print(round(c(theta[2], thetaDN[2], thetaUP[2], stderr[2]),4))
 
-##  plot the evolution of the parameters over the values of rho
-
-par(mfrow=c(2,1))
-plot(rhoMat, thesave[,1], type <- "b", lwd=2, 
-     xlab="rho", ylab="rate parameter")
-plot(rhoMat, thesave[,2], type <- "b", lwd=2, 
-     xlab="rho", ylab="forcing parameter")

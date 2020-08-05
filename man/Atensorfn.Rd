@@ -23,20 +23,20 @@
   this reason.
 }
 \usage{
-  Atensorfn(modelList, coefList)
+  Atensorfn(modelList)
 }
 \arguments{
   \item{modelList}{A list object containing the specification of a Data2LD model. 
   Each member of this list contains a list object that defines a single linear 
   differential equation.}
-  \item{coefList}{A list object containing the specifications of one or more coefficient 
-  functions.}                                      
 }
 \details{
-  A coefficient specification can be made manually, or can set up in a by a single 
-  invocation of function \code{make.coef}.  Model specifications can also be set 
-  manually, or by an invocation of function \code{make.variable} for each linear 
-  equation in the system.
+  Variable specifications can be set by an invocation of function
+  \code{make.Variable} for each linear differential equation in the system.
+  Functions \code{Atensorfn}, \code{BAtensorfn} and \code{Btensorfn} will not
+  normally be required by users since they are invoked automatically with the
+  function \code{checkModel}, which is required to be invoked before the
+  analysis of the data.
 }
 
 \value{

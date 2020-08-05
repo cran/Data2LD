@@ -1,21 +1,13 @@
 ---
-title: "How to Use the Data2LD Package"
+title: "Using the Data2LD Package"
 author: "J. O. Ramsay"
-date: "2019-01-24"
+date: "2020-06-19"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Using the Data2LD package}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
-
-```{r} setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  fig.width  = 7,
-  fig.height = 5
-  )
-```
 
 # Introduction: What does `Data2LD` do?
 
@@ -26,63 +18,31 @@ Below we offer a basic introduction to systems of linear differential equations,
 You will need to have a working knowledge of the functional data software package `fda` in order to implement a `Data2LD` analysis.  If you are a little shakey on the subject of functional data analysis, you can consult Kokowszka, P. (2017) and Ramsay, Hooker and Graves (2009) as introductory references or Ramsay and Silverman (2005) as a more complete source.
 
 These notes are intended to only introduce the idea of a differential equation and how to set up a data analysis using such an equation as a model.  The examples here are elementary.  More sophisticated sample analyses are to be found in the demo files
-* 1 AverageTemp
-* 2 CruiseControl
-* 3 fdascript
-* 4 HeadImpact
-* 5 Refinery
+* AverageTemp
+* CruiseControl
+* Fdascript
+* HeadImpact
+* Refinery
 
 ## The parameter cascading approach
 
 We won't go into the math here, but we want to explain the key idea behind how `Data2LD` estimates the parameters that define the differential equation.  The values of these parameters are contained in a one-column matrix that we call `theta` in our code examples.
 
-Actually, there are two sets of parameters that are needed to define the solution of a differential equation.  Although we focus on the typically small number that define the equation itself, we also need a larger number of parameters that we use to define a variable in the differential equation, `x(t)`.  We represent the one or more of these at computational level by choosing a set of *basis functions*, $\phi_k(t), k=1,...,K$, that is sufficiently rich that it can accommodate how complex the shape of `x(t)` may be.  Choosing the right basis is a key step, which we will comment on in these notes.
+Actually, there are two sets of parameters that are needed to define the solution of a differential equation.  Although we focus on the typically small number that define the equation itself, we also need a larger number of parameters that we use to define a variable in the differential equation, $x(t)$.  We represent the one or more of these at computational level by choosing a set of *basis functions*, $\phi_k(t), k=1,...,K$, that is sufficiently rich that it can accommodate how complex the shape of $x(t)$ may be.  Choosing the right basis is a key step, which we will comment on in these notes.
 
-Each of these basis functions is multiplied by a coefficient $c_k$ and the results added to define a *linear expansion* of our approximation to `x(t)`.  That is, $$x(t) = \sum_k^K c_k \phi_k(t).$$ Depending on how curvature and other shape features there are in the variable, the number of $K$ these coefficients is apt to be large, and if there are multiple variables in the a set of equations, this will be particularly so.
+Each of these basis functions $\phi_k(t)$ is multiplied by a coefficient $c_k$, and the resulting terms are then added to define a *linear expansion* of our approximation to `x(t)`.  That is, $$x(t) = \sum_k^K c_k \phi_k(t).$$ Depending on how curvature and other shape features there are in the variable, the number of $K$ these coefficients is apt to be large, and if there are multiple variables in the a set of equations, this will be particularly so.
 
-Our central idea is to define these coefficients as *functions* $c_k(\theta)$ of the parameters defining the equation.  In this way, the linear expansion coefficients are no longer free to vary as they please, and ultimately the variables themselves are completely determined by the parameter values that we estimate or that we use along the way to the estimation.  
+Our central idea is to define these coefficients as functions $c_k(\theta)$ of the parameters defining the equation.  In this way, the linear expansion coefficients are no longer free to vary as they please, and ultimately the variables themselves are completely determined by the parameter values that we estimate or that we use along the way to the estimation.  
 
-This parameter cascading estimation strategy has two important advantages.  First, it means that our fit to the data is low-dimensional in the sense that it depends only on the small fixed number of equation parameters.  Well, it we must admit that the fit also depends on a single constant $0 \le \rho < 1$ that controls how much emphasis is placed on satisfying the equation exactly.
+This parameter cascading estimation strategy has two important advantages.  First, it means that our fit to the data is low-dimensional in the sense that it depends only on the small fixed number of equation parameters.  The fit also depends on a single constant $0 \le \rho < 1$ that controls how much emphasis is placed on satisfying the equation exactly.
 
-The second advantage is that the computation is greatly speeded up and is much more stable relative to older approaches to parameter estimation.  We also derive additional stability in the estimation by how we control $\rho$.  For small $\rho$ values, the emphasis is strongly on fitting the data, and as such the computation tends to proceed relatively smoothly.  We steadily increase $\rho$ towards one, as you will see below, and with each increase use as starting parameter values those computed for the previous value.  As a consequence, you will see in our two examples that typically only two or three optimization steps are required for each value of $\rho.$  We are usually particularly interested in how well we fit the data for $\rho$ very close to one, when the variable(s) are very close to being exact solutions to the equation. Thus, we ultimately use values like $\rho = 0.9997$.
+The second advantage is that the computation is greatly speeded up and is much more stable relative to older approaches to parameter estimation.  We also derive additional stability in the estimation by how we control $\rho$.  For small $\rho$ values, the emphasis is strongly on fitting the data, and as such the computation tends to proceed relatively smoothly.  We steadily increase $\rho$ towards one, as you will see below, and with each increase use as starting parameter values those computed for the previous value.  As a consequence, you will see in our two examples that typically only two or three optimization steps are required for each value of $\rho.$  We are usually particularly interested in how well we fit the data for $\rho$ very close to one, when the variable(s) are very close to being exact solutions to the equation. Thus, we ultimately use values like $\rho = 0.999$.
 
 ## The architecture of a linear differential equation
 
-### A single differential equation
+### A single differential equation and its terms
 
-A single linear differential equation has a derivative of order $m$ on the left side of the equation, which we shall denote by $D^m x(t)$ instead of using the older and more cumbersome notation $d^m x/d t^m.$  Although $D^m x(t)$ is a function of time or some other continuum, we will often minimize the clutter in our notation by dropping "$(t)$" from our expressions.  
-
-The right side of the equation consists of a sum of terms, each being the product of of a function $\beta_j$ and an order of derivative of the variable that is less than the order $m$ that is on the left side.
-
-In the simplest situation, order $m = 1$, there is only a single term on the right side and $\beta_j$ is a constant.  For example, the differential equation defining exponential decay over time is  $Dx(t) = -\beta x(t)$ or, dropping "$(t)$", $Dx = -\beta x$.  Here the single constant parameter $\beta > 0$ determines the rate of decay, and is therefore called a "rate constant."  The time taken for the decay to be about 95% complete is $4/\beta$.
-
-A simple order $m = 2$ example is the equation for harmonic motion $D^2x = -\beta x$, $\beta > 0$, the solution to which is the weighted sum of a sine and a cosine function.  The frequency of period is $T = 2 \pi / \beta$ so that if $\beta = 2 \pi$ the solution oscillates once per time unit.
-
-A slightly more complex equation is that for damped harmonic motion $D^2x = -\beta_0 x - \beta_1 Dx, \beta_0 > 0$.  The solution combines sinusoidal behavior with an exponential evolution of the amplitude.  Depending on the sign and size of the damping coefficient $\beta_1$, the evolution is exponential decrease or increase.
-
-The coefficient or multiplier functions $\beta_j$ can be functions of $t$, or of any other external variable, but the most frequent case in practice is that they are constants.  What they cannot be is functions of the value $x$ or of any of its derivatives.  
-
-What makes the equation linear is (1) that a sum of terms is involved, and (2) each term is a product of a multiplier $\beta(t)$.  For example the differential equation $Dx(t) = \beta*x(t)*[K - x(t)]$ is nonlinear because it involves the square of $x$.
-
-The general formulation for a term on the right side of the equation is $b \beta(t) D^j x(t)$ where $b$ is a fixed known constant and $j < m$, such as the -1 that we used above.
-
-### Forcing or input terms to systems of equations
-
-We consider, too, that one or more of these functional variables $x_i$ may be in a linear causal relationship with some known input or covariate variables $u_{i\ell}, \ell = 1,\ldots,L_i$ that are also observed.  These will be incorporated into the relevant differential equations as additional explanatory terms, and they are called *forcing* variables.  Each $u_{i\ell}$ is multiplied by a coefficient function $\alpha_\ell$ which, like the rate functions, may vary over time and also over the value of any external variable, but not over values of any variables $x_i$ in the system.  
-
-A forcing function may be simply the constant 1, in which case the focus is on estimating its coefficient function $\alpha_{\ell}$ as an unknown input to the equation.  We refer to this situation as *dynamic data smoothing*.
-
-If an equation does not have any forcing functions, it is called *homogeneous* or *autonomous*.  If it does, it is called *nonhomogeneous* or *nonautonomous* or, more simply, *forced*.  The autonomous portion of a differential equation is said to define the *dynamic behavior* of the variable, including how it responds to variation in any forcing functions that may be present.  We  refer to terms involving derivatives of any of the variables $x_j$ as *homogeneous* terms.
-
-Chapter 3 of Ramsay and Hooker (2017) can be consulted for more details.
-
-### Systems of linear differential equations
-
-A system of differential equations involves $d$ variables $x_i, i=1,\ldots,d$.  We allow the left side to have an order of derivative $m_i$ that varies from one equation to another.  
-
-The right side of the $i$th equation is a sum of terms involving derivatives $D^k x_j$ of orders $k$ less than $m_j$.  Although there is the potential for a very large number of such terms if $d$ is at all large, this usually does not happen.  Rather the terms for equation $i$ involve only one or two variables other than the variable $x_i$ on the left side of the equation, as well as terms involving that variable itself.
-
-## Example systems
+A single linear differential equation has a derivative of order $m$ on the left side of the equation, which we shall denote by $D^m x(t)$ instead of using the older and more cumbersome notation $d^m x/d t^m.$  Although $D^m x(t)$ is a function of time or some other continuum, we will often minimize clutter in our notation by dropping "$(t)$" from our expressions.  
 
 Here are some simple examples that may help to clarify the structure of linear differential equation systems, and illustrate the notation that we use.
 
@@ -99,6 +59,36 @@ Here are some simple examples that may help to clarify the structure of linear d
   * Second order forced
       : $D^2x = \beta_1 x + \beta_2 Dx  + \alpha u$
 
+The right side of the equation consists of a sum of terms, each being the product of a coefficent, $\alpha$ or $\beta$, and a variable, $x(t)$ or $u(t)$.
+
+The coefficient or rate may be a constant, or it may be a function of time and/or of some variable that is external to the system of equations.  What the coefficient or rate function multiplies can be one of two things.  If it multiplies a derivative of the variable $x(t)$ in the equation, we call the product a *homogeneous term* in the equation, and we will use the notation $\beta$ or $\alpha(t)$ for the coefficient.  The homogeneous coefficient or multiplier functions $\beta_j$ can be functions of $t$, or of any other external variable, but the most frequent case in practice is that they are constants.  If the system is linear, which we assume here, what coefficient cannot be is a function of the value $x$ or of any of its derivatives.   
+
+If the coefficient is a function of a system variable, or if what it multiplies is not just the simple value of a variable, the equation is nonlinear, and not an object that this package uses.  A contrasting example is the differential equation $Dx(t) = \beta*x(t)*[K - x(t)]$, which is nonlinear because it involves the square of $x$.  Nonlinear equations are treated in the package CollocInfer.
+
+A coefficient may also multiply a function of time that is not a variable in the system, that is, not one of the variable derivatives $D^j x(t)$.  The term then represents external input that modifies the behavior of the derivative of the variable $D^m x(t)$ on the left side.  We call such a product a *forcing term* and we use the notaton $\alpha$ or $\alpha(t)$ for the coefficient, and $u(t)$ for an external function.  
+
+Often a term has a third multiplier, which is a fixed constant.  This we call a *factor* in the term.  It is especially often that the factor is -1, and in such cases it is usually understood that coefficient function is non-negative.
+
+The general formulation for a homogeneous term on the right side of the equation is $b \beta(t) D^j x(t)$ where $b$ is a fixed known constant and $j < m$, such as the -1 that we used above.  A forcing term is $a \alpha(t) u_{\ell}(t)$ where $a$ is the fixed factor, which is dropped if it is one.  
+
+In the simplest situation, the derivative order on the left side is $m = 1$, there is only a single term on the right side and $\beta_j$ is a constant.  For example, the differential equation defining exponential decay over time is  $Dx(t) = -\beta x(t)$ or, dropping "$(t)$", $Dx = -\beta x$.  Here the single constant parameter $\beta > 0$ determines the rate of decay, and is therefore called a "rate constant."  The factor is -1, as we indicated above. The time taken for the decay to be about 95% complete is $4/\beta$.
+
+A simple order $m = 2$ example is the equation for harmonic motion $D^2x = -\beta x$, $\beta > 0$ and factor -1, the solution to which is the weighted sum of a sine and a cosine function.  The frequency of period is $T = 2 \pi / \beta$ so that if $\beta = 2 \pi$ the solution oscillates once per time unit.
+
+A slightly more complex equation is that for damped harmonic motion $D^2x = -\beta_0 x - \beta_1 Dx, \beta_0 > 0$.  The solution combines sinusoidal behavior with an exponential evolution of the amplitude.  Depending on the sign and size of the damping coefficient $\beta_1$, the evolution is exponential decrease or increase.
+
+To sum up, what makes the equation linear is (1) that it is a sum of terms, and (2) each term is a product of a multiplier or rate function and the value of a variable or its derivative (homogeneous), or an external variable (forcing).  Such is the jargon of dynamic modelling.
+
+Chapter 3 of Ramsay and Hooker (2017) can be consulted for more details.
+
+### Systems of linear differential equations
+
+A system of differential equations involves $d$ variables $x_i, i=1,\ldots,d$.  We allow the left side of equation $i$ to have an order of derivative $m_i$ that varies from one equation to another.  
+
+The right side of the $i$th equation is a sum of terms involving derivatives $D^k x_j$ of orders $k$ less than $m_j$.  Although there is the potential for a very large number of such terms if $d$ is at all large, this usually does not happen.  Rather the terms for equation $i$ involve only one or two variables other than the variable $x_i$ on the left side of the equation, as well as terms involving that variable itself.
+
+## More example systems
+
 All these examples involve only a single variable, and we want to extend them to allow for more than one variable with mutual additive effects on each other.  Now we will need two subscripts on each coefficient, the first of which pertains to the variable being affected, and the second to the variable producing the effect.  In fact, for higher order equations, we will also need a third index that specifies the order of derivative.
 
   * Two first orders unforced
@@ -113,6 +103,7 @@ All these examples involve only a single variable, and we want to extend them to
 Notice in the third example that, because variable $x_2$ has a second order equation, there can be a contribution from the variable itself (that is, $D^0 x_2$) as well as from its first derivative.  The third index can take values from 0 to $m-1.$
 
 But, thankfully, most systems used in practice will not need this level of complexity.  In fact, typically, the majority of these contributions are not in the equation at all.  Moreover, some of the elements in the equation will be associated with known rate functions, for example, with values that may have been determined by earlier experiments.  
+
 Often a specific rate function $\beta$ or forcing function coefficient function $\alpha$ may appear more than once in a system of equations, in which case the notation for specifying the equations may have to be modified so as to make this clear.  But it's still important to keep the three-index notation $\beta_{i_1,i_2,j}$ in mind since, in summary, on the right side of equation $i_1$ there is the potential to have a contribution from the $j$th derivative of variable $i_2$, as well as from forcing functions $u_{i_1 \ell}, \ell = 1, \ldots, L_{i_1}$ modulated by multiplicative coefficient $\alpha_{i_1 \ell}$.  
 
 Here, in summary, are the facets of a linear differential equation system that an `Data2LD` analysis can handle:
@@ -128,7 +119,7 @@ Future versions of `Data2LD` will allow other possibilities, such as multiple ob
 
 A single functional observation is a set of $n$ values $y_j$ at a set of time points $t_j$ contained with some interval that we shall assume, without losing any generality, ranges from 0 to $T$.  For simplicity, we shall also assume that the observations are univariate, that is, each $y_j$ is a single real number.  We also assume that the times are strictly ordered,  so that $t_j < t_{j+1}$.  What makes the observations functional is that a smooth function $x(t)$ underlies these data, and that $y_j$ reflects the function value $x(t_j)$.  
 
-`Data2LD` assumes the classic relation $y_j = x(t_j) + e_j$
+`Data2LD` implicitly assumes the classic relation $y_j = x(t_j) + e_j$
 where the "errors" or "residuals" have a distribution with mean $\mu = 0$, variance $\sigma^2$  that is finite, and that their distribution is independent of that of the $x(t_j)$'s. These assumptions justify the use of least squares approximation to the data, which `Data2LD` implements.
 
 Note that not all of the $d$ functions $x_i, i=1,\ldots,d$ may be observed, a situation that is quite common in applications.  
@@ -141,29 +132,59 @@ Here we take you through the steps and decisions required to execute an `Data2LD
 
 This is where you set up the differential equation, perhaps the most important step of all.  
 
-Your greatest hazard will be exuberance!  It is extremely easy to over-parameterize a model defined by a differential equation, and in the writer's experience, a large portion of published equations are.  An over-parameterized equation is one for which certain coefficients and combinations of coefficients cannot be estimated given the data that one is using.  Whether or not a model is over-parameterized will depend on the configuration of the data.  For multi-equation systems it is common to have data available for only a subset of the equations.
+Your greatest hazard will be exuberance!  It is really easy to over-parameterize a model defined by a differential equation, and in the writer's experience, a large portion of published equations are just that.  An over-parameterized equation is one for which certain coefficients and combinations of coefficients cannot be estimated given the data that one is using.  Whether or not a model is over-parameterized will depend on the configuration of the data.  For multi-equation systems it is common to have data available for only a subset of the equations. It may not be obvious which combinations of parameters are under-determined by the data,  and a good deal of experimentation with alternative models may be required before the final equation is defined.
 
-So begin with the simplest possible equation or system that you can imagine has anything to say about the data, even if it is known to be only a caricature.  Check the estimated system using methods described below to see that is well-defined by the data, and then consider only a few elements to the equation, preferably one at a time, again accompanied by careful confirmation of identifiability.  You have been warned!
+So begin with the simplest possible equation or system that you can imagine that has anything to say about the data, even if it is known to be only a caricature.  Check the estimated system using methods described below to see that is well-defined by the data, and then consider only a few elements to the equation, preferably one at a time, again accompanied by careful confirmation of identifiability.  You have been warned!
 
-## Specify the observation interval and observation times
+## Specify the observation interval, the observation times, and load the observations
 
-The observation values and the times of observation are specified in a list array of length $d$, the number of variables in the system.  It is usual for some variables not be observed, and the corresponding lists will be empty as a consequence.  The number of spacing of times can vary from one list to another, but even if they are the same for all variables, this information is required in list corresponding to an observed variable.
+The observation values and the times of observation are specified in a list array of length $d$, the number of variables in the system.  A list array is an un-named list defined by the R code `listArray = vector("list", d)`.  A specfic $j$th element in the array is accessed by the R code `listArray[[j]]`. 
+
+A specific member of `listArray` is itself a named list, with two members: 
+* `argvals`: This contains a vector of increasing observation times $t$.
+* `y`:  This contains the same number of observation values.
+
+It is usual for some variables not to be observed, and the corresponding lists will be empty as a consequence.  The number of spacing of times can vary from one list to another, but even if they are the same for all variables, this information is required in list corresponding to an observed variable.
 
 It can happen that observations do not have a one-to-one correspondence with variables.  For example, an observation may be of the sum of two variables.  Unfortunately, function `Data2LD` cannot accommodate such data configurations, but this is a target for future development.
 
-## Setting up the `coefList` list array defining rate functions and forcing function multipliers
+## Select one or more basis systems for representing the solution(s)
 
-As we noted above,  some rate functions $\beta$ and forcing coefficient functions $\alpha$ can appear at more one place in a system of equations.  More generally, the number and types of these coefficients can vary from one equation to another.  These considerations imply that we need to define these $\beta$ and $\alpha$ coefficient functions first, before setting up the equations themselves by defining their terms.  
+There are two classes of basis systems in an `Data2LD` analysis: the rate or coefficient function bases and the variable bases.  The variable bases $\phi_{ik}(t)$ define the estimate of the solution functions $x_i$.  Here some care and thought is required.  The basis system is not determined so much by the data, as it would be in normal smoothing, but rather by what behaviour the variable must exhibit in order to allow an accurate solution to the equations.  Often, for example, highly localized curvature is present and especially where a forcing function is discontinuous, as it often is.  In such a condition, high knot density for a B-spline expansion is required, or even multiple knots at a known specific location.  Both the cruise control and the head impact examples exhibit this problem.  A good quality final choice for a variable system may require considerable experimentation.
 
-Each rate or coefficient function is defined by one or more parameters.  Some functions will have parameters that must be estimated by `Data2LD`, and some others will be defined by parameter values treated as fixed.  All parameter values will need to be specified, however, since even those to be estimated must have initial values that will be modified in the course of optimizing the fits to the data.  It will often be the case that rate or coefficient functions are simple constants, and thus require only a single parameter value.  A more general but still simple case is where the function is defined by a basis function expansion, and therefore can be considered as a functional data object (see references above for more information on functional data objects if needed).
+The class of basis systems is those that define the coefficient or rate functions.  These are usually functional data basis objects, and where constant coefficients are involved are constant basis functions.  Normally the coefficient bases are much smaller in size than those for representing $x_i(t)$ since we expect a lot of curvature in the equation solution, but only mild curvature in a rate function $\beta(t)$.  There is also a provision for coefficient functions that the user defines.
 
-The most general case is one in which the user defines the function by providing a function handle.  In this case, and if these parameters require estimation, a second function handle is also required for the partial derivative of the function with respect to the parameters that define it.
+## Setting up vectors of list objects defining each term in each differential equation
 
-Often terms contain a constant, such as -1.  For example, the simple first order equation is often specified as $Dx(t) = -\beta x(t)$ because, if $\beta$ is positive, the variable will respond to a sharp change in input by a more gentle exponential approach to a new level.  Therefore we accommodate the use of fixed constants in a term's definition.
+Each rate or coefficient function is defined by one or more parameters.  Some functions will have parameters that must be estimated by `Data2LD`, and some others will be defined by parameter values treated as fixed.  All parameter values will need to be specified, however, since those to be estimated must have initial values that will be modified in the course of optimizing the fits to the data.  It will often be the case that rate or coefficient functions are simple constants, and thus require only a single parameter value.  A more general but still simple case is where the function is defined by a basis function expansion, and therefore can be considered as a functional data object (see references above for more information on functional data objects if needed).
 
-Each rate or coefficient function is specified as a `list` object within a list of a single-dimension list array of length equal to the total number of these functions.  
+The most general case is one in which the user defines the function by providing a function definition  In this case, and if these parameters require estimation, a second function definition is also required for the partial derivative of the function with respect to the parameters that define it.
 
-The `list` object has these named fields:
+## Setting up the list vectors defining the system of equations
+
+A vector of length $d$, which will call a  `modelList`, specifies the structure of the system of $d$ differential equations in roughly the same way that you would write down the equations one after the other.  The vector is defined by the code `modelList <- vector("list", d).`
+
+Each list in `modelList` contains in turn list  and other objects that define the essential information about the corresponding equation.  These seven items are named members or fields, and are as follows, with the name appearing in bold face and description of the object following:
+
+* __XList__:  This is a one-dimension list array (list), with each list containing a list 
+  object that specifies a term in the equation that involves either $x_i$ or a derivative 
+  $D^jx_i$ of the variable.  We call these the *homogeneous* terms in 
+  order to distinguish them from the terms involving forcing functions.  The length of the 
+  `XList`  list array is equal to the number of homogeneous terms in the equation.  
+  The details of the list object in a list of `XList` will be specified in the next 
+  paragraph.
+* __FList__:  This is also a one-dimension list array, with each member containing a list 
+  object, to be described below, that specifies the nature of a forcing function term.  If  the equation does    not have forcing term, an empty list `NULL` is used. The details of the list object in a list of `Fterm` will   be specified in the next paragraph.
+* __order__: a positive integer specifying the highest order derivative $m$ in the 
+  equation, the expression $D^m x_i$ typically appearing to the left of the equal sign for   equation $i$.
+* __name__: A character string to be used as a name for the variable.  If not supplied, it defaults to `x1`, `x2` and so on.
+* __weight__: a positive number specifying a weight to used in defining the total fit to the data.  This is required when variables differ widely in scale, as often happens.  If not supplied, it defaults to one.
+
+### The `XList` object
+
+Now let's look at the list object that is contained in a list in `XList`.  
+
+The following six fields are required to be set up by the user:
 
 * __fun__ :   one of:
     * functional basis object of type `basis`
@@ -177,85 +198,57 @@ The `list` object has these named fields:
         function value
 * __parvec__ :  a numeric vector containing the initial values of each of the parameters defining the coefficient function.  If the function is a functional data object, this will be the vector of values of the coefficients defining its basis expansion.  If the function is just a constant, then only a single real value is required, and this is taken as defining a constant functional data object.
 * __estimate__ :   a logical or integer value indicating whether or not the function is to be treated as fixed.  If an integer is supplied, zero indicates fixed and any other value indicates estimated.
-
-Each function `list` object can be set up manually, which is not a bad idea for keeping track of what you have done, but we also provide a function `make.Coef` that will set up the `list` object in a single line of code.  Its call is `make.Coef(fun, parvec, estimate, coeftype)`.
-
-There is lots of scope for making mistakes in the setup, and consequently a function `coefCheck` is provided that should be called after the list array is defined, and is also called automatically within `Data2LD`.  It can be invoked by the command `coefCheck(coefList)`.
-
-## Select one or more basis systems for representing the solution(s)
-
-There are two classes of basis systems in an `Data2LD` analysis: the rate or coefficient function bases and the variable bases.  The variable bases define the estimate of the solution functions $x_i$.  Here some care and thought is required.  The basis system is not determined so much by the data, as it would be in normal smoothing, but rather by what behaviour the variable must exhibit in order to allow an accurate solution to the equations.  Often, for example, highly localized curvature is present and especially where a forcing function is discontinuous, as it often is.  In such a condition, high knot density for a B-spline expansion is required, or even multiple knots at a known specific location.  Both the cruise control and the head impact examples exhibit this problem.  A good quality final choice for a variable system may require considerable experimentation.
-
-## Setting up the list array defining the system of equations
-
-Argument `modelList` specifies the structure of the system of differential equations in roughly the same way that you would write down the equations one after the other.  It is a single-dimension list array of length equal to the number of equations.  
-
-Each list in `modelList` contains a list object that in turn contains the essential information about the corresponding equation.  These seven items are named fields, and are as follows, with the name appearing in bold face and description of the object following:
-
-* __XList__:  This is a one-dimension list array (list), with each list containing a list 
-  object that specifies a term in the equation that involves either $x_i$ or a derivative 
-  $D^jx_i$ of the variable.  We call these the -homogeneous- or -autonomous- terms in 
-  order to distinguish them from the terms involving forcing functions.  The length of the 
-  `XList`  list array is equal to the number of homogeneous terms in the equation.  
-  The details of the list object in a list of `XList` will be specified in the next 
-  paragraph.
-* __FList__:  This is also a one-dimension list array, with each list containing a list 
-  object, to be described below, that specifies the nature of a forcing function term.  If   the equation does not have forcing term, an empty list $\{\}$ is used. The details of   
-  the list object in a list of `Fterm` will be specified in the next paragraph.
-* __order__: a positive integer specifying the highest order derivative $m$ in the 
-  equation, the expression $D^m x_i$ typically appearing to the left of the equal sign for   equation $i$.
-* __name__: A character string to be used as a name for the variable.  If not supplied, it defaults to `x1`, `x2` and so on.
-weight: a positive number specifying a weight to used in defining the total fit to the data.  This is required when variables differ widely in scale, as often happens.  If not supplied, it defaults to one.
-* __nallXterm__: an integer specifying the number of homogeneous terms in this equation.  
-* __nallFterm__: an integer specifying the total number of forcing terms in this equation
-
-### The `XList` object
-
-Now let's look at the list object that is contained in a list in `XList`.  
-
-The following four fields are required to be set up by the user:
-
 * __variable__ :   This field contains an integer specifying which of the variables is involved in this term.  Any of the variables are candidates, and they may appear in any order.  It is usual to have a contribution from the equation's variable itself and/or one or more of its derivatives, but other variables may also appear.
 * __derivative__ :  The order of the derivative of the variable in the term. This derivative order must be less than that variable's highest derivative order.
-* __ncoef__ :   The index of the function specification in the list array `coefList`.   factor :   An optional specification of a fixed constant multiplier for the term.  This is often either -1 or 1, but may be any value.  It defaults to 1.  
+* --factor-- : The fixed constant multiplier, such as -1. 
 
-Again we supply a single line command `make.Xterm(variable, ncoef, derivative, factor)`
-that can do this set up of a single homogeneous term for you.
+Again we supply a single line command `make.Xterm(funobj, parvec, estimate, variable, derivative, factor)` that can do this set-up of a single homogeneous term for you.
 
 ### The `FList` object
 
 The list objects contained in the lists of the `FList` list array specify the forcing functions and the coefficients $\alpha(t)$ that multiply them.  
 
-There are three required fields for each forcing function:
+There are five required fields for each forcing function:
 
-
+* __fun__ :   one of:
+    * functional basis object of type `basis`
+    * a functional data object of type `fd`
+    * a functional parameter object of type `fdPar`
+    * a `list` object with these named fields:
+        * __fd__   :   a functional handle for the Matlab code defining the value of the            function
+        * __Dfd__  :   a functional handle for the Matlab code defining the value of the 
+        derivative of the function with respect to its parameters
+        * __more__ :   any additional information required for the code defining the     
+        function value
+* __parvec__ :  a numeric vector containing the initial values of each of the parameters defining the coefficient function.  If the function is a functional data object, this will be the vector of values of the coefficients defining its basis expansion.  If the function is just a constant, then only a single real value is required, and this is taken as defining a constant functional data object.
+* __estimate__ :   a logical or integer value indicating whether or not the function is to be treated as fixed.  If an integer is supplied, zero indicates fixed and any other value indicates estimated.
 * __Ufd__ :   A functional data object of the `fd` class specifying the forcing 
   function.  If there are replications involved, this object may have the same number of    replications, or it may be a single function, in which case, this function is used for    all replicates.
-* __ncoef__ :   The index of the function specification in the list array `coefList`.
 * __factor__ :   An optional specification of a fixed constant multiplier for the term.  
   This is often either -1 or 1, but may be any value.  It defaults to 1.  
 
-The command that will set this up automatically is `make.Fterm(variable, ncoef, Ufd, factor)`.
+The command that will set this up automatically is `make.Fterm(fun, parvec, estimate, Ufd, factor)`.
 
-Finally, these two list arrays plus the other five objects that define a single linear differential equation must be combined into `list` object that is within the respective list of the over model list array that defines the complete system.  A single line command that will do this for you if you prefer is `make.Variable(name, order, XList, FList)`.  The `weight` field can be set manually if you need to do so, and the remaining two fields `nallXterm` and `nallFterm` are automatically set when you use the `make.Model` function described below.
+Finally, these two list vectors plus the other three objects `name`, `order` and `weight` that define a single linear differential equation must be combined into `list` object that is within the respective list of the over model list array that defines the complete system.  A single line command that will do this for you is `make.Variable(name, order, XList, FList, weight)`.  The `weight` field can be set manually if you need to do so, and the remaining two fields `nallXterm` and `nallFterm` are automatically set when you use the `make.Model` function described below.
 
-The function `make.Model` should be used immediately after the model list array is specified, and it will be called automatically within `Data2LD`.  It can be invoked by the command `make.Model(XbasisList, modelList, coefList)`.
+The function `checkModel` should be used immediately after the model list array is specified, and it will be called automatically within `Data2LD`.  It can be invoked by the command `checkModel(XbasisList, modelList,)`.
 
 ## Compute starting values for estimated coefficients using derivative matching 
 
 This is an optional step, since `Data2LD` often works fine with simple initial coefficient values like zero, and supplying good initial values often only saves one or two iterations.  
-
 However, if good initial values are considered important, these can be constructed by a process that we call *gradient matching.}  This involves an initial smoothing of the data for each observed variable, with a view to estimating the highest required derivative.  Then the derivatives are converted to functional data objects, and these are used in the arguments of the `fRegress` function that fits a concurrent linear model. \cite{Ramsay:09} can be consulted for further details, and the cruise control examples show how this is done in that context.
 
-## Preliminary computations of four-way tensors
+## Preliminary computations of four-way tensors in `checkModel()`
 
-In this as well as in many algorithms, certain quantities need only be computed once, and once set up, can be reused each time a function is invoked.  In the case of `Data2LD`,  the integral of each product of terms in each equation must be evaluated over and over again, and the approximation of the integral can be a time-consuming affair.  But this computational load can be greatly reduced by computing once and for all the four-way array of integrals of products of four basis functions, where the basis functions involved are those the $\beta$ and/or $\alpha$ bases and at the same time those of possible pairs of solution basis functions. 
+In this as well as in many algorithms, certain quantities need only be computed once, and once set up, can be reused each time a function is invoked.  In the case of `Data2LD`,  the integral of products of four basis functions in all pairs of terms are required over and over again, and the approximation of these integral can be a time-consuming.  But this computational load can be greatly reduced by computing once and for all the four-way array of integrals of products of four basis functions, where the basis functions involved are those the $\beta$ and/or $\alpha$ bases and at the same time those of possible pairs of solution basis functions. 
+
+This is done in the checking function `checkModel`, and using this function before doing any analysis should always be done.  In addition, the function displays a nice summary of the structure of the model as a means of further checking.
 
 ## A simple example: The refinery data
 
-Our simplest example of a setup is for the analysis of the refinery data described in our references and available for analysis in our distribution package.
+Our simplest example is the analysis of the refinery data described in our references and available for analysis in our distribution package.
 
-The single differential equation is $Dx(t) = -\beta x(t) + \alpha u(t)$.  Note that both rate function $\beta$ and forcing coefficient $\alpha$ are constants.  Moreover, by convention in the field of chemical engineering, a minus sign appears in front of $\beta$, which is expected to be constant.  The homogeneous part of the equation is the differential equation for exponential decay.  The data are observations of fluid level in a tray in a refinery cracking tower, and the forcing function is a valve setting which is close until time 67 minutes when it is opened.  The forcing function is specified as a functional data object `Ufd`.  The observations are recorded until 193 minutes.  Both coefficients will be estimated.
+The single differential equation is $Dx(t) = -\beta x(t) + \alpha u(t)$.  Note that both rate coefficient $\beta$ and forcing coefficient $\alpha$ are constants.  By convention, a minus sign appears in front of $\beta$, which is expected to be positive.  The homogeneous part of the equation, $Dx(t) = -\beta x(t)$, is the differential equation for exponential decay.  The data are observations of fluid level in a tray in a refinery cracking tower, and the forcing function is a valve setting which is closed until time 67 minutes when it is opened.  The forcing function is specified as a functional data object `Ufd`, and is a step function.  The observations are recorded until 193 minutes.  Both coefficients will be estimated.
 
 These commands set up the data that we want to analyze:
 ```{r}
@@ -308,51 +301,27 @@ We plot the basis so that we can see that placing two knots or breakpoints at ti
   TrayBasisList[[1]] <- TrayBasis
 ```
 
-We now begin to defining the coefficients that multiply the terms on the right side of the equation.  These will be contained in a list array of length two containing the specifications of the two multiplier functions, one for the multiplier $\beta(t)$ of the homogeneous term and one for the multiplier $\alpha(t)$ of the input or forcing function. 
-
+Now we turn to defining the right side of the equation.  Both of the coefficient functions are constants, but we should still define them as functional data objects in order to remind ourselves that coefficients can be functions of time.  In this code we define a constant basis over the observation interval, make it into a functional data object with value zero everywhere, and then make two fdPar objects, one for the homogeneous term, and one for the forcing term.  
 ```{r}
-  conbasis <- create.constant.basis(c(0,193))
-  TrayCoefList <- vector("list",2)
-  TrayCoefList[[1]] <- make.Coef(fun=conbasis, parvec=exp(rnorm(1)), 
-                               estimate=TRUE)
-  TrayCoefList[[2]] <- make.Coef(fun=conbasis, parvec=exp(rnorm(1)), 
-                               estimate=TRUE)
+conbasis   <- create.constant.basis(c(0,193))
+confd      <- fd(0,conbasis)
+betafdPar  <- fdPar(confd)
+alphafdPar <- fdPar(confd)
 ```
+This is overkill; we could just put `conbasis` in as the coefficient function for both terms, we do want to keep the process in its most general form.
 
-Now we have to check the structure of the coefficient list `TrayCoefList`.  We do this by passing the object through function `coefCheck`, which generates a named list.  This function traps a variety of common errors.  It also adds a member to each coefficient object called `index` which is the indices in the master parameter vector `theta` of the parameter values defining the coefficient object.  For this reason, using `coefCheck` is mandatory; if you don't use it, other aspects of the analysis may fail.  However, if you forget, you may get away with it; the function `Data2LD` invokes `coefCheck` before doing anything else.
-
-Function `coefCheck` also by default produces a summary of the values for each coefficient.  If you want to use the function without making a report, include `REPORT = FALSE' in its arguments.
-
-The list object that `coefCheck` generates contains a member named `coefList`, which is the checked and indexed version of `TrayCoefList` that we want to use.  The second line in this code below replaces the coefficient object used as the argument by the checked and indexed version.  The third and fourth lines display the total number of parameters to estimate in the master parameter vector `theta`, which is 2.
+Next we define the list object of length 1 containing the specification of the single homogeneous term of the model.  In the definition, we supply a reasonable positive value for the value of the coefficient function, specify that its value will be optimized in the estimation process, that it will multiple the variable itself rather than one of its derivatives, and that there will be a fixed factor -1 multiplying the term.  How did we get the value 0.04?  We know that an exponential decay is pretty much completed in $4/\beta$ time units (minutes), and from our plot of the data we could that this took about 193 - 67 = 126 minutes. Using 4/0.04 = 100 minutes is close enough in this context.
 ```{r}
-TraycoefResult <- coefCheck(TrayCoefList)
-TrayCoefList   <- TraycoefResult$coefList
-TrayNtheta     <- TraycoefResult$ntheta
-print(paste("Total number of parameters = ",TrayNtheta))
-```
-
-Actually, it is necessary that the rate constant $\beta$ multiplying the tray level be positive.  Although there is no danger in this example that it will ever go non-positive, we can instead be sure of that by using the following definition that uses a `list` object for the `fun` field of `coefList1`:
-```{r}
-  #funList       <- list(fun=fun.explinear, Dfun=fun.Dexplinear)
-  #coefList1     <- make.Coef(funList, 0, TRUE, "beta")
-  #coefList2     <- make.Coef(confdPar, 0, TRUE, "alpha")
-  #coefList      <- vector("list",2)
-  #coefList[[1]] <- coefList1
-  #coefList[[2]] <- coefList2
-```
-The two short and simple functions that appear in the definition of `funList` define the exponential of a basis function expansion and the corresponding derivative, and are distributed with the code package.
-
-Next we define the list object of length 1 containing the specification of the single homogeneous term of the model.
-```{r}
-  XTerm <- make.Xterm(variable=1, derivative=0, ncoef=1, 
-                      factor=-1, name="reaction")
+  #  Xterm Fields:    funobj     parvec  estimate  variable deriv. factor
+  XTerm <- make.Xterm(betafdPar, 0.04,   TRUE,     1,       0,     -1)
   XList <- vector("list", 1)
   XList[[1]] <- XTerm
 ```
-  
+
  Then we define the list object containing the specification of the single forcing term.
 ```{r}
-  FTerm <- make.Fterm(ncoef=2, Ufd=Valvfd, name="Valve")
+  #  Fterm Fields:    funobj      parvec  estimate  Ufd      factor
+  FTerm <- make.Fterm(alphafdPar, 1.0,    TRUE,     Valvfd,  1)
   FList <- vector("list", 1)
   FList[[1]] <- FTerm
 ```  
@@ -360,26 +329,25 @@ Next we define the list object of length 1 containing the specification of the s
 ```{r}
   TrayVariable <- make.Variable(XList=XList, FList=FList, 
                                 name="Tray level", order=1)
+  TrayModelList <- vector("list",1)
+  TrayModelList[[1]] <- TrayVariable
 ```
 
-We conclude the setup of the model by placing the variable definition into a list object of length one, and then checking the structure of this definition to invoking `make.Model`.
+Finally we define the model object by combining the basis system with the variable definitions and the coefficient definitions.  This step is also mandatory because it not only checks the structure of the objects in the argument list, but it also computes some four-way arrays or tensors that are used repeatedly in an analysis.   It also displays the structure of the model so that we make a visual check as well.
+
 ```{r}
-  TrayVariableList <- vector("list",1)
-  TrayVariableList[[1]] <- TrayVariable
+checkModelList <- checkModel(TrayBasisList, TrayModelList, summarywrd=TRUE)
+TrayModelList  <- checkModelList$model
+nparam         <- checkModelList$nparam
+print(paste("Number of parameters =",nparam))
 ```
 
-Finally we define the model object by combining the basis system with the variable definitions and the coefficient definitions.  This step is also mandatory because it not only checks the structure of the objects in the argument list, but it also computes some four-way arrays or tensors that are used repeatedly in an analysis. 
+We invoke function `Data2LD()` once to ensure that everything is working.  To do this, we must define a value of the smoothing parameter $\rho$ that controls the degree of smoothness in the solution function.
 ```{r}
-  TrayModelList <- make.Model(TrayBasisList, TrayVariableList, TrayCoefList)
-```
-
-Finally, we invoke `Data2LD` once to ensure that everything is working.  To do this, we first must define a value of the smoothing parameter $\rho$ that controls the degree of smoothness in the solution function.
-```{r}
-  rhoVec <- 0.5
-  Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, 
-                       TrayCoefList, rhoVec)
-  MSE  <- Data2LDList$MSE    #  Mean squared error for fit to data
-  DMSE <- Data2LDList$DpMSE  #  Gradient with respect to parameter values
+rhoVec <- 0.5
+Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoVec)
+MSE  <- Data2LDList$MSE    # Mean squared error for fit to data
+DMSE <- Data2LDList$DpMSE  #  gradient with respect to parameter values
 ```
 
 We can now proceed to the optimizations of data fits for a sequence of values of $\rho$.  The following code sets up values that control the optimization, and defines a sequence of $\rho$ values:
@@ -387,32 +355,38 @@ We can now proceed to the optimizations of data fits for a sequence of values of
 ```{r}
 dbglev   <-  1    #  debugging level
 iterlim  <- 50    #  maximum number of iterations
-convrg   <- c(1e-8, 1e-4)  #  convergence criterion
+convrg   <- 1e-6  #  convergence criterion
 
-gammavec <- 0:6
+gammavec <- 0:7
 nrho     <- length(gammavec)
 rhoMat   <- as.matrix(exp(gammavec)/(1+exp(gammavec)),nrho,1)
 dfesave  <- matrix(0,nrho,1)
 gcvsave  <- matrix(0,nrho,1)
 MSEsave  <- matrix(0,nrho,1)
-thesave  <- matrix(0,nrho,TrayNtheta)
+ISEsave  <- matrix(0,nrho,1)
+thesave  <- matrix(0,nrho,nparam)
 ```
+
+The value of $\rho$ provided by the argument `rho` requires special comment, and a more detailed explanation of its meaning can be found in \cite{RamsayHooker17}.  the value of $\rho$ may be either a single number greater than or equal to zero and less than one, or a vector of such numbers.  The role of these values is to control the relative emphasis on fitting the data versus satisfying the differential equation.  For lower values such as 0.5, the data will be closely approximated but the resulting $x(_i)t)$  will not fit satisfy the differential equation particularly well, and the estimates of the parameters in `theta.opt` will be relatively poor.  On the other hand, high values like 0.999 will place strong emphasis on fitting the differential equation and provide good parameter estimate, but at the expense of a poorer fit to the data.
+
+For smaller values of $\rho$ the optimization proceeds rapidly, but if we proceed directly to use large values, the optimization can become more difficult, and may terminate in a local minimum that is not globally optimal. 
+
+We therefore recommend using a vector of values, and the optimization code will use these one after another, feeding the parameter estimates at each value on as initial values for the next optimization.  The values of `rho` be increasing, but not by equal steps.  Instead, using the formula $\rho = \exp(\gamma)/[1 + \exp(\gamma)]$ where the increasing values of $\gamma$ can be integer sequences such as 0, 1, ..., 7, which values the values of $\rho$ as 0.5, 0.73, 0.88, 0.95, 0.98, 0.99, 0.997, and 0.999.
 
 Here we cycle through the increasing values of $\rho$ and optimize the fit using function `Data2LD.opt`.  Note that we pass the parameter estimates at each value on as initial values for the next optimization.
 
 ```{r}
-TrayCoefList.opt <- TrayCoefList
+TrayModelList.opt <- TrayModelList
+
 for (irho in 1:nrho) {
   rhoi <- rhoMat[irho]
   print(paste("rho <- ",round(rhoi,5)))
   Data2LDResult <- Data2LD.opt(TrayDataList, TrayBasisList, 
-                               TrayModelList,  TrayCoefList.opt, 
-                               rhoi, convrg, 
+                               TrayModelList,  rhoi, convrg, 
                                iterlim, dbglev)
   theta.opti <- Data2LDResult$thetastore
-  TrayCoefList.opti <- modelVec2List(theta.opti, TrayCoefList)
-  Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, 
-                         TrayCoefList.opti, rhoi)
+  TrayModelList.opti <- modelVec2List(TrayModelList, theta.opti)
+  Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoi)
   MSE       <- Data2LDList$MSE 
   df        <- Data2LDList$df
   gcv       <- Data2LDList$gcv 
@@ -422,41 +396,81 @@ for (irho in 1:nrho) {
   dfesave[irho]   <- df
   gcvsave[irho]   <- gcv
   MSEsave[irho]   <- MSE
+  ISEsave[irho]   <- ISE
 }
 ```
 
-We display for each value of $\rho$ some summary measures.  Value `df` is a measure of degrees of freedom in the fit.  As $\rho$ nears one, this value approaches 2, the number of parameters in the model.  Value `gcv` is called the *generalized cross-validation* value, and is often used to choose the best value of $\rho$.  Value `MSE` is the mean-squared error of the fit to the data.
+We display for each value of $\rho$ some summary measures.  Value `df` is a measure of degrees of freedom in the fit.  As $\rho$ nears one, this value approaches 2, the number of parameters in the model.  Value `gcv` is called the *generalized cross-validation* value, and is often used to choose the best value of $\rho$.  Value `MSE` is the mean-squared error of the fit to the data, and value ISE is the integrated squared error between the left and right sides of the differential equation.
+
 ```{r}
-#   rho   df     gcv     MSE
-# 0.500  20.5  0.0043  0.00347
-# 0.731  18.9  0.0043  0.00351
-# 0.881  16.3  0.0043  0.00364
-# 0.953  13.0  0.0046  0.00403
-# 0.982   9.6  0.0054  0.00491
-# 0.993   6.7  0.0066  0.00617
-# 0.998   4.4  0.0076  0.00723
+print("    rho      df         gcv,       MSE       ISE")
+for (irho in 1:nrho) {
+  print(round(c(rhoMat[irho,1], dfesave[irho], gcvsave[irho], 
+                MSEsave[irho], ISEsave[irho]),5))
+}
 ```
 
-As we indicated in the introduction, we often want to see how well we fit the data using a nearly exact solution to the equation.  This code evaluates that fit at the highest value $\rho = 0.998.$
+As we indicated in the introduction, we often want to see how well we fit the data using a nearly exact solution to the equation.  This code evaluates that fit at the highest value $\rho = 0.999.$
 
 ```{r}
 irho <- nrho  #  evaluate solution for (highest rho value
-TrayCoefList <- modelVec2List(thesave[irho,], TrayCoefList)
-Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, 
-                       TrayCoefList, rhoMat[irho,])
+irho <- 8  #  evaluate solution for (highest rho value
+TrayModelList <- modelVec2List(TrayModelList, thesave[irho,])
+Data2LDList <- Data2LD(TrayDataList, TrayBasisList, TrayModelList, rhoMat[irho,])
+df        <- Data2LDList$df
+gcv       <- Data2LDList$gcv 
+MSE       <- Data2LDList$MSE 
+ISE       <- Data2LDList$ISE 
+Var.theta <- Data2LDList$Var.theta
+beta  <- thesave[irho,1]
+alpha <- thesave[irho,2]
+print(paste("beta  =",round(beta,3)))
+print(paste("alpha =",round(alpha,3)))
+print(paste("df  = ", round(df,1)))
+print(paste("gcv = ", round(gcv,5)))
+print(paste("MSE = ", round(MSE,5)))
+print(paste("ISE = ", round(ISE,5)))
 ```
 
 This code plots the fit to the tray level data along with the data.
 
 ```{r}
+# plot fit of solution to data
 Trayfd   <- Data2LDList$XfdParList[[1]]$fd
 tfine    <- seq(0,193,len=101)
 Trayfine <- eval.fd(tfine, Trayfd)
+Ufine    <- eval.fd(tfine, Valvfd)
 par(mfrow=c(1,1))
 plot(tfine, Trayfine, type="l", lwd=2, 
      xlab="Time", ylab="Tray level", xlim=c(0,193), ylim=c(-0.5,4.5))
 points(TimeData, TrayData)
 ```
+
+We have estimated the two constant coefficients in the homogeneous and forcing terms.  How well does the data define our estimated values?  This requires estimates of standard errors of these estimates, which we can easily extract from the matrix `Var.theta` returned by function `Data2LD` using the highest value of $\rho$.
+
+```{r}
+theta   <- thesave[nrho,]
+stderr  <- sqrt(diag(Var.theta))
+thetaUP <- theta + 2*stderr
+thetaDN <- theta - 2*stderr
+print(round(c(theta[1], thetaDN[1], thetaUP[1], stderr[1]),4))
+print(round(c(theta[2], thetaDN[2], thetaUP[2], stderr[2]),4))
+```
+
+At the highest value of $\rho$ we hope (but cannot guarantee) that the linear differential equation will be almost exactly solved by the function fitting the data.  If so, and if we are satisfied with the fit to the data, then we can celebrate having found the right model for the data.  In the following code, we compute values of the left and right side of the equation and display then plotted over each other.
+
+```{r}
+# compute the derivative Dx(t) and the right side of the equation
+theta <- thesave[irho,]
+DTrayData <- eval.fd(TimeData, Trayfd, 1)
+DTrayfit  <- -theta[1]*Trayfine + theta[2]*Ufine
+# plot the left and right sides of the equation
+plot(TimeData, DTrayData, type="b", lwd=2,
+     xlab="Time", ylab="DTray level", xlim=c(0,193), ylim=c(-0.01,0.12))
+lines(tfine, DTrayfit)
+```
+
+We see that at the highest value of $\rho$ we have exactly satisfied the differential equation since first derivative values (circles), estimated by smoothing the data and the fit (smooth curve) nearly overlap.  
 
 What have we achieved here?  This simplest of differential equations is able to capture how tray level responds to a change in valve setting by using only two parameters.  The fit to the data is about as good as we could wish.
 
@@ -464,13 +478,13 @@ Further details are available in both Ramsay and Hooker (2007) and in the code t
 
 ## A two-variable system: The cruise control model
 
-This example is not much more complicated, but does illustrate how one rate function can appear in more than one place in a system.  It models how a simple feedback system works, in this case the accelerator pedal in a car.  The two variables are the speed ($S$) of a car and feedback ($C$) as the driver manipulates the accelerometer to change the target speed ($S_0$).  The data consist of 41 simulated observations for each variable, distributed uniformly of the time interval [0,80].  The input variable is the desired speed or *set point* $S_0(t)$, and it is changed at times 0, 20, 40 and 60 to speeds 60, 40, 80 and 60 kilometres per hour, respectively.
+This example is not much more complicated, but does illustrate how one rate function can appear in more than one place in a system.  It models how a simple feedback system works, in this case the accelerator pedal in a car.  The two variables are the speed ($S$) of a car and feedback ($C$) as the driver manipulates the accelerometer to change the target speed ($S_0$).  The data consist of 41 simulated observations for each variable, distributed uniformly over the time interval [0,80].  The input variable is the desired speed or *set point* $S_0(t)$, and it is changed at times 0, 20, 40 and 60 to speeds 60, 40, 80 and 60 kilometres per hour, respectively.
 
 The two differential equations are:
 $$DS(t) = -\beta_{SS} S(t) + \beta_{SC} C(t)$$
 $$DC(t) =  \beta_{CS} S(t) - \beta_{CC} C(t) + \alpha_{C} S_0(t)$$
 where $\beta_{SS} = 1$, $\beta_{SC} = 1/4$, $\beta_{CS} = -1$, $\beta_{CC} = 0$ and $\alpha_C = 1.$
-The homogeneous part of the speed equation is again that of exponential decay, and it is forced by the control variable.  The homogeneous part of the control equation is zero, and it is forced by the difference between the set point and the current speed.  The system works by increasing $C$ when the current speed is less than the target and decreasing it when it is greater.  The increase is passed into the speed equation as an additive forcing by $C$ modulated by the value of $\alpha_S$.  Because of the exponential decay dynamics of $S$, the speed will approach the new speed target with an exponentially decreasing rate.
+The homogeneous part of the speed equation is again that of exponential decay, and it is forced by the control variable.  The homogeneous part of the control equation is held fixed at zero, and it is forced by the difference between the set point and the current speed.  The system works by increasing $C$ when the current speed is less than the target and decreasing it when it is greater.  The increase is passed into the speed equation as an additive forcing by $C$ modulated by the value of $\alpha_S$.  Because of the exponential decay dynamics of $S$, the speed will approach the new speed target with an exponentially decreasing rate.
 
 ```{r}
 T     <- 80  #  seconds
@@ -480,7 +494,7 @@ tobs  <- seq(0,T,len=n)
 tfine <- seq(0,T,len=501)
 ```
 
-Set up the set-point forcing function.  The set-point function uses an order 1 step function B-spline basis in order to define a function that is piecewise constant.  The knots are placed at the points where the set-point changes values.
+We now set up the set-point forcing function.  The set-point function uses an order 1 step function B-spline basis in order to define a function that is piecewise constant, since order 1 implies that there is only one parameter defining each basis function.  The knots are placed at the points where the set-point changes values.
 
 ```{r}
 steporder  <- 1  #  step function basis
@@ -491,8 +505,9 @@ stepcoef   <- c(60,40,80,60)  # target speed for each step
 SetPtfd    <- fd(stepcoef, stepbasis)  # define the set point function
 ```
 
-Here is a function that evaluates the right side of the equation for a 
-time value:
+In this example we simulate data, and this will require that we construct the true solutions to the two equations, and then add some noise to simulate data with error.
+
+In order to compute the solutions, we first define a function that evaluates the right side of the equation for a time value:
 
 ```{r}
 cruise0 <- function(t, y, parms) {
@@ -505,13 +520,13 @@ cruise0 <- function(t, y, parms) {
 ```
 
 We first have a look at the solution at a fine mesh of values by solving
-the equation for the points in `tfine` using the differential equation solver `lsoda` in the `deSolve` package.  We confess we ran into a small glitch here.  If we solved the equation of the full interval $0,80$, `lsoda` tried to solve  equation for a time value slightly larger than 80.  So we solved the equation for all but last time value, and then tacked on the true solution values at the end. The matrix `ytrue` that is returned has the time values in the first column and the values of the speed and control variables in the remaining two columns
+the equation for the points in `tfine` using the differential equation solver `lsoda` in the `deSolve` package. We confess we ran into a small glitch here.  If we solved the equation of the full interval $0,80$, `lsoda` tried to solve  equation for a time value slightly larger than 80.  So we solved the equation for all but last time value, and then tacked on the true solution values at the end. The matrix `ytrue` that is returned has the time values in the first column and the values of the speed and control variables in the remaining two columns
 
 ```{r}
 y0 <- matrix(0,2,1)
-parms = list(SetPtfd=SetPtfd)
-ytrue = lsoda(y0, tfine[1:500], cruise0, parms)
-ytrue = rbind(ytrue,matrix(c(80,60,240),1,3))
+parms = list(SetPtfd=SetPtfd)                   #  define the input to the cruise0 function above
+ytrue = lsoda(y0, tfine[1:500], cruise0, parms) # solve the equation using an initial value solver
+ytrue = rbind(ytrue,matrix(c(80,60,240),1,3))   # combine with the final values
 ```
 
 Now we use the interpolation function `approx` to get true values at the 41 observation times.
@@ -566,53 +581,31 @@ Cbasis  <- create.bspline.basis(c(0,80), nCbasis, nCorder, breaks)
 cruiseBasisList[[2]] <- Cbasis
 ```
 
-Now that we have the data and the bases for representing the solution, we can turn to the task of specifing the five constant coefficient functions $\beta_{SS}, \beta_{SC}, \beta_{CS}, \beta_{CC}$ and $\alpha_C$. Here we use the handy function `make.Coef` to set up each rate or forcing coefficient. We make the homogeneous term $\beta_C$ zero and not estimated just for purposes of illustration.
+Now that we have the data and the bases for representing the solution, we can turn to the task of specifing the five constant coefficient functions $\beta_{SS}, \beta_{SC}, \beta_{CS}, \beta_{CC}$ and $\alpha_C$. Here we use the handy functions `make.Xterm` and `make.Fterm` to set up each rate or forcing coefficient. We make the homogeneous term $\beta_C$ zero and not estimated, leaving only four parameters to be estimated from the data.
 
-First set up a functional parameter object that has the constant value 1 over all the interval.  This serves as the forcing function.
+First set up a functional parameter object that has the constant value 1 over all the interval.  This defines each of the coefficient functions.
 ```{r}
 conbasis    <- create.constant.basis(rng)
 confdPar    <- fdPar(conbasis)
 ```
 
-Now define each of the four coefficient functions and load them into an list object of length four, recalling that coefficient $\beta_{SC} = \alpha_C.$
-
+There are two homogeneous terms for each equation, and the second equation has a forcing function which sets the target speeds.  Here we define each of the five terms.
 ```{r}
-cruiseCoefListS.S <- make.Coef(confdPar,    1, TRUE)
-cruiseCoefListS.C <- make.Coef(confdPar,  1/4, TRUE)
-cruiseCoefListC.S <- make.Coef(confdPar,    1, TRUE)
-cruiseCoefListC.C <- make.Coef(confdPar,    0, FALSE)
-
-cruiseCoefList <- list(4,1)
-cruiseCoefList[[1]] <- cruiseCoefListS.S
-cruiseCoefList[[2]] <- cruiseCoefListS.C
-cruiseCoefList[[3]] <- cruiseCoefListC.S
-cruiseCoefList[[4]] <- cruiseCoefListC.C
-```
-
-Check the coefficient list and replace it with a version that has the `index` field for each coefficient.
-```{r}
-Result   <- coefCheck(cruiseCoefList)
-cruiseCoefList <- Result[[1]] 
- theta         <- Result[[2]]
-ntheta         <- Result[[3]]
-```
-Here variable `ntheta` will have value 3 since $\beta_{CC} = 0.$
-
-The model is set up with two homogeneous terms for each variable plus a forcing term for variable `control`.  Note that we assign the same coefficient number to the last homogeneous coefficient and the forcing coefficient.
-```{r}
+# List object for the speed equation: A term for speed and a term for control, but no forcing
 SList.XList = vector("list",2)
-#  Fields:                     variable ncoef derivative factor
-SList.XList[[1]] <- make.Xterm(1,       1,    0,         -1)
-SList.XList[[2]] <- make.Xterm(2,       2,    0,          1)
+#  Fields:                     funobj    parvec  estimate  variable deriv. factor
+SList.XList[[1]] <- make.Xterm(confdPar, 1,      TRUE,     1,       0,     -1)
+SList.XList[[2]] <- make.Xterm(confdPar, 1/4,    TRUE,     2,       0,      1)
 SList.FList = NULL
 SList = make.Variable("Speed", 1, SList.XList, SList.FList)
-# List object for the control equation
+# List object for the control equation:  a term for speed, and a zero-multiplied term for control plus a term for the forcing function SetPtfd
 CList.XList <- vector("list",2)
-CList.XList[[1]] <- make.Xterm(1,       3,    0,         -1)
-CList.XList[[2]] <- make.Xterm(2,       4,    0,          1)
+#  Fields:                     funobj    parvec  estimate  variable deriv. factor
+CList.XList[[1]] <- make.Xterm(confdPar, 1,      TRUE,     1,       0,     -1)
+CList.XList[[2]] <- make.Xterm(confdPar, 0,      FALSE,    2,       0,      1)
 CList.FList <- vector("list",1)
-#  Fields:                 variable ncoef Ufd      factor
-CList.FList[[1]] <- make.Fterm(3, SetPtfd, 1)
+#  Fields:                     funobj    parvec  estimate  Ufd      factor
+CList.FList[[1]] <- make.Fterm(confdPar, 1,      TRUE,     SetPtfd, 1)
 CList <- make.Variable("Control", 1, CList.XList, CList.FList)
 #  List array for the whole system
 cruiseVariableList <- vector("list",2)
@@ -622,25 +615,31 @@ cruiseVariableList[[2]] <- CList
 
 Now set up the model object.
 ```{r}
- cruiseModelList <- make.Model(cruiseBasisList, cruiseVariableList, cruiseCoefList)
+cruiseModelList <- vector("list",2)
+cruiseModelList[[1]] <- SList
+cruiseModelList[[2]] <- CList
 ```
-We do a preliminary evaluation of the least squares criterion at the parameter values that we have set up in `coefList`.  
+
+We run a check on the set up of the model.  It is so easy to slip up somewhere!
 ```{r}
-rhoMat = 0.5*matrix(1,1,2)
-Data2LDList <- Data2LD(cruiseDataList, cruiseBasisList, 
-                       cruiseModelList, cruiseCoefList, rhoMat)
-MSE     <- Data2LDList$MSE
-DpMSE   <- Data2LDList$DpMSE
+cruiseModelCheckList <- checkModel(cruiseBasisList, cruiseModelList)
+cruiseModelList <- cruiseModelCheckList$modelList
+nparam <- cruiseModelCheckList$nparam
+print(paste("total number of parameters = ", nparam))
 ```
-We are now ready to optimize the criterion with respect to parameter values.  This involves the following call to function `Data2LD.opt`:  `Data2LD.opt(yList, XbasisList, cruiseList, coefList.opt, rho)`. 
 
-Argument `rho` requires special comment, and a more detailed explanation of its meaning can be found in \cite{RamsayHooker17}.  `rho` may be either a single number greater than or equal to zero and less than one, or a vector of such numbers.  The role of these values is to control the relative emphasis on fitting the data versus satisfying the differential equation.  For lower values such as 0.5, the data will be closely approximated but the resulting of the $x_i$'s will not fit the equation particularly well, and the estimates of the parameters in `theta.opt` will be relatively poor.  But values like 0.999 will place strong emphasis on fitting the differential equation and provide good parameter estimate, but with a possible degradation of the fit to the data.
+We do a preliminary evaluation of the least squares criterion at the parameter values that we have set up in `coefList`.  Even after running the check above, it's possible that there is an error that the checking function did not catch.  
+```{r}
+rhoVec <- 0.5*matrix(1,1,2)
+Data2LDList <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList, rhoVec)
+print(Data2LDList$MSE)
+print(Data2LDList$DpMSE)
+```
 
-For smaller values of `rho` the optimization proceeds rapidly, but if we proceed directly to use large values, the optimization becomes more difficult, and may terminate in a local minimum that is not globally optimal.  
+Notice that the gradient for the fourth parameter is exactly 0, so that the parameter never changes value.
 
-We therefore recommend using a vector of values, and the optimization code will use these one after another, feeding the parameter estimates at each value on as initial values for the next optimization.  The values of `rho` be increasing, but not by equal steps.  Instead, using the formula $\rho = \exp(\gamma)/[1 + \exp(\gamma)]$ where the increasing values of $\gamma$ can be integer sequences such as 0, 1, ..., 7, which values the values of $\rho$ as 0.5, 0.73, 0.88, 0.95, 0.98, 0.99, 0.997, and 0.999.
+We are now ready to optimize the criterion with respect to parameter values.  This involves the following call to function `Data2LD.opt`:  `Data2LD.opt(yList, XbasisList, cruiseList, coefList.opt, rho)`.  Here is a setup of this nature. 
 
-Here is a setup of this nature. 
 ```{r}
 conv    <- 1e-4  
 iterlim <- 20    
@@ -652,74 +651,70 @@ rhoMat  <- matrix(exp(Gvec)/(1+exp(Gvec)),nrho,2)
 dfesave <- matrix(0,nrho,1)
 gcvsave <- matrix(0,nrho,1)
 MSEsave <- matrix(0,nrho,2)
-thesave <- matrix(0,nrho,ntheta)
+thesave <- matrix(0,nrho,nparam)
+```
 
-cruiseCoefList.opt <- cruiseCoefList  
+Here are the analyses for each value of $\rho.$  Note the we start by defining a copy of the model List, so that the optimal value estimated for any value of $\rho$ can be passed on as the initial value to be used in the optimization for the next $\rho$ value.
+
+You will now see how quickly the solution is achieved for each value of $\rho$.
+
+```{r}
+cruiseModelList.opt <- cruiseModelList  #  initialize the optimizing coefficient values
 for (irho in 1:nrho) {   
   rhoVeci <- rhoMat[irho,]
   print(paste(" ------------------  rhoVeci <- ", round(rhoVeci[1],4), 
               " ------------------"))
-  Data2LDOptList <- Data2LD.opt(cruiseDataList, cruiseBasisList, 
-                                cruiseModelList, cruiseCoefList.opt, 
+  Data2LDOptList <- Data2LD.opt(cruiseDataList, cruiseBasisList, cruiseModelList.opt, 
                                 rhoVeci, conv, iterlim, dbglev)
-  theta.opti     <- Data2LDOptList$theta  
-  cruiseCoefList.opti  <- modelVec2List(theta.opti, cruiseCoefList)  
-  Data2LDList    <- Data2LD(cruiseDataList, cruiseBasisList, 
-                            cruiseModelList, cruiseCoefList.opti, 
-                            rhoVeci)
+  theta.opti <- Data2LDOptList$theta  # optimal parameter values
+  cruiseModelList.opt <- modelVec2List(cruiseModelList, theta.opti) 
+  #  evaluate fit at optimal values and store the results
+  Data2LDList    <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList.opt, rhoVeci,
+                            TRUE)
   thesave[irho,]  <- theta.opti
   dfesave[irho]   <- Data2LDList$df
   gcvsave[irho]   <- Data2LDList$gcv
   x1fd            <- Data2LDList$XfdParList[[1]]$fd
-  x2fd            <- Data2LDList$XfdParList[[2]]$fd
   x1vec           <- eval.fd(tobs,  x1fd)
+  msex1           <- mean((x1vec - speedObs)^2)
+  x2fd            <- Data2LDList$XfdParList[[2]]$fd
   x2vec           <- eval.fd(tobs,  x2fd)
-  MSEsave[irho,1] <- mean((x1vec - speedObs)^2)
-  MSEsave[irho,2] <- mean((x2vec - controlObs)^2)
-  cruiseCoefList.opt    <- cruiseCoefList.opti  #  update the optimizing coefficient values
+  msex2           <- mean((x2vec - controlObs)^2)
+  MSEsave[irho,1] <- msex1
+  MSEsave[irho,2] <- msex2
 }
 ```
-
-The first line of this setup set values that determine how much output function `Data2LD.opt` produces.  The setting here produces one line per iteration, but values of 2 or 3 produce more detailed results that can be used to diagnose problems encountered during optimization.  
-
-The second line specifies two thresholds that must be satisfied before termination is declared.  The first quantity is the maximum change in a parameter from one iteration to the next, and the second is required root-mean-squared average of the gradient values.  The third line specifies the maximum number of iterations that is allowed.
-
-The line after the invocation of `Data2LD.opt` hands the optimized parameter values in parameter vector `theta.opti` over as initial values for the next value of `rho`.
-
-Either after the "for" loop, or as in this case after every optimization, a single invocation of `Data2LD` returns a variety of objects that can be used to display final results.
 
 Here are the summary measures for these analyses. Value `RMSE` is the square root of the mean squared error.
 
 ```{r}
-#   rho  df     gcv   RMSE
-# 0.500  44.7   20.1  1.98
-# 0.731  34.0   26.0  2.10
-# 0.881  25.4   33.8  2.33
-# 0.953  12.8   34.6  0.86
-# 0.982   6.9   37.5  0.61
-# 0.993   4.0   39.3  0.59
-# 0.998   2.7   40.4  0.82
-# 0.999   2.2   41.3  1.27
+ind <- 1:nrho
+#  print df, gcv and MSEs
+print("    rho      df        gcv        RMSE:")
+print(cbind(round(rhoMat,4),  round(dfesave,1), 
+            round(gcvsave,1), round(sqrt(MSEsave),2)))
 ```
+
+It can be interesting to see how the estimated parameters change over the sequence of values of $\rho$, noting that the fourth fixed parameter never changes value.
+
+```{r}
+matplot(rhoMat, thesave, type="b", xlab="rho", ylab="theta(rho)")
+```
+
+Now let's look more closely at the solution for the maximum value of $\rho$, where the fit to the data should be also a near-solution to the differential equation.
 
 ```{r}
 rho.opt   <- rhoMat[nrho,]
 theta.opt <- thesave[nrho,]
-cruiseCoefList.opt <- modelVec2List(theta.opt, cruiseCoefList)
-DataLDList <- Data2LD(cruiseDataList, cruiseBasisList, 
-                      cruiseModelList, cruiseCoefList.opt, rho.opt)
+#  convert the optimal parameter values to optimal cruiseModelList
+cruiseModelList.opt <- modelVec2List(cruiseModelList, theta.opt)
+#  evaluate the solution at the optimal solution
+DataLDList <- Data2LD(cruiseDataList, cruiseBasisList, cruiseModelList.opt, rho.opt,
+                      TRUE)
 ```
 
-display parameters with 95% confidence limits
-
-```{r}
-stddev.opt <- sqrt(diag(DataLDList$Var.theta))
-
-#  True   Est.  Std. Err. Low CI  Upr CI
-#  1.00  1.037    0.196    0.645   1.430
-#  0.25  0.259    0.049    0.161   0.356
-#  1.00  0.942    0.045    0.853   1.032
-```
+Plot the estimated solutions, as estimated from the data, rather
+than from the initial value estimates in the above code
 
 ```{r}
 XfdParList <- Data2LDList$XfdParList
@@ -729,24 +724,77 @@ Xvec1 <- eval.fd(tfine, Xfd1)
 Xvec2 <- eval.fd(tfine, Xfd2)
 Uvec  <- eval.fd(tfine, SetPtfd)
 cruiseDataList1 <- cruiseDataList[[1]]
-cruiseDataList2 <- cruiseDataList[[2]]
 plot(tfine, Xvec1, type="l", xlim=c(0,80), ylim=c(0,100), 
      ylab="Speed",
      main=paste("RMSE =",round(sqrt(MSEsave[3,1]),4)))
+lines(tfine, ytrue[,2], lty=2)
 points(cruiseDataList1$argvals, cruiseDataList1$y, pch="o")
-lines(tfine, Uvec, lty=2)
+#lines(tfine, Uvec, lty=2)
+cruiseDataList2 <- cruiseDataList[[2]]
 plot(tfine, Xvec2, type="l", 
-     xlab="Time (sec)", ylab="Control")
+     xlim=c(0,80), ylim=c(0,400),
+     xlab="Time (sec)", ylab="Control",
+     main=paste("RMSE =",round(sqrt(MSEsave[3,2]),4)))
+lines(tfine, ytrue[,3], lty=2)
 points(cruiseDataList2$argvals, cruiseDataList2$y, pch="o")
 ```
 
-Of course we are using simulated data here, and it's natural to wonder how well we would do in real-life situations.  For example, it's easy to record the speed of the car, say, once a second, but quite a bit more technical to measure the input from the cruise controller itself. We wonder how well we will fit only data about car speed, and using only these data, how well we will recover the controller activity.
+Display parameters with 95% confidence limits
 
-You can have a look at this by two simple changes in our code.  First, alter the third coefficient by using the command `cruiseCoefListC.S <- make.Coef(confdPar,    1, FALSE)`, so that this coefficient is fixed at its initial value of one and there are only two parameters to estimate.  Secondly, change the specification of the controller data by replacing the command `Cdata <- list(argvals=tobs, y=yobs[,2])` by the command `Cdata <- list(NULL)`, causing `Data2LD` to only work with the speed data.  You will see that a rather fine fit to speed and a nice recovery of the controller activity will result.  If you fix the third fixed parameter value to other positive values, you will see that the only effect will be to change the size of the controller curve.
+```{r}
+stddev.opt <- sqrt(diag(DataLDList$Var.theta))
+theta.tru <- c(1, 1/4,  1, 0,  1)
+print("    True      Est.      Std. Err. Low CI    Upr CI:")
+for (i in 1:nparam) {
+  print(round(c(theta.tru[i], 
+                theta.opt[i], 
+                stddev.opt[i], 
+                theta.opt[i]-2*stddev.opt[i], 
+                theta.opt[i]+2*stddev.opt[i]), 4))
+}
+```
+
+###  Fitting the constrained cruise control model $\beta_{CS} = \alpha$
+
+In our first analysis we ignored the fact that that the speed coefficents 
+$\beta_{CS}$ and $\alpha$ are identical since they
+define a difference.  Thus the four-parameter model over-fits the
+data by one degree of freedom.  We saw that these two values were close, but not
+identical.  Now we re-analyze the data by
+incorporating the constraint into the analysis, and in this way reduce the 
+number of parameters to be estimated to 3.
+
+Suppose that we have $n$ parameters and these are subject to $k$
+constraints.   We can write this in matrix terms as $A'p = 0$ where
+$A$ is an $n$ by $k$ matrix, each column of which defines a constraint on
+the $n$ parameter values in column vector $p$.  
+
+We deal with linear parameter constraints in the optmization by defining an $n$ by $n-k$ matrix
+$P$ in such a way that $q = P'p$ is a vector of length $n-k$ whose values
+are unconstrained, and that $p = P*q$ is a vector length $n$ that satisfies
+the $k$ constraints.
+
+There are several ways of defining matrix $PR with this property, but
+perhaps the easiest way is to use the `qr` decomposition.  If we
+evaluate statement `[Q,R] = qr(A)`, the resulting matrix $Q$ is $n$ by $n$ and
+has orthonormal columns, so that $Q'*Q = I$.  Matrix $R$, not used here,
+is upper triangular.
+Matrix $P$ is defined as the last $n-k$ columns of $Q$, and therefore $P'*P = I.$
+
+In our example, matrix $A$ has a single column ($k$ = 1), and its values are defined by
+the command `parMap = matrix(c(0, 0, 1, 0, -1),5,1)`.  It is not necessary to re-define the model
+and run `checkModel`.  Instead, we just add matrix `parMap' as an additional argument to the
+call to function `Data2LD.opt`, so that 
+
+```{r}
+#  parMap = matrix(c(0, 0, 1, 0, -1),5,1)  
+#  Data2LDOptList <- Data2LD.opt(cruiseDataList, cruiseBasisList, cruiseModelList.opt, 
+#                                rhoVeci, conv, iterlim, dbglev, parMap)
+```
+
+If you re-run the above code, you will discover that convergence is faster for each value of $\rho$ and that these two values are now equal.  Moreover, the estimates of the other parameters are also improved
 
 See Ramsay and Hooker (2017) for much more explanation of these analyses.
-
-Additional illustrations can be found in the Data2LD package demos.
 
 # References
 

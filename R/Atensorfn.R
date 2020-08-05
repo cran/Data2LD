@@ -1,16 +1,16 @@
-Atensorfn <- function(modelList, coefList) {
+Atensorfn <- function(modelList) {
   #  Set up ATENSORLIST as a list of length NVAR defining products of forcing terms.
   #  NFORCEI is the number of forcing terms for this variable.
   #  Each member of AtensorList[[ivar]] is a list of length NFORCEI
   #  and each member of this is a list of length NFORCEI
 
-  #  Last modified 14 December 2018
+  #  Last modified 15 April 2020
 
   nvar <- length(modelList)
   AtensorList <- vector("list", nvar)
   for (ivar in 1:nvar) {
     modelListi <- modelList[[ivar]]
-    if (modelListi$nallFterm > 0) {
+    if (!is.null(modelListi$FList)) {
       #  there are NFORCE forcing terms for this variable
       nforce <- modelListi$nallFterm
       AtensorListi <- vector("list",nforce)
@@ -20,9 +20,7 @@ Atensorfn <- function(modelList, coefList) {
       #  loop through forcing terms
       for (jv in 1:nforce) {
         modelListiv <- modelListi$FList[[jv]]
-        ncoefv      <- modelListiv$ncoef
-        coefListv   <- coefList[[ncoefv]]
-        AfdParv     <- coefListv$fun
+        AfdParv     <- modelListiv$fun
         if (is.fdPar(AfdParv) || is.fd(AfdParv) || is.basis(AfdParv)) {
           Ufdv      <- modelListiv$Ufd
           if (is.basis(AfdParv)) {
@@ -42,9 +40,7 @@ Atensorfn <- function(modelList, coefList) {
           #  loop through forcing terms again
           for (jx in 1:nforce) {
             modelListix <- modelListi$FList[[jx]]
-            ncoefx      <- modelListix$ncoef
-            coefListx   <- coefList[[ncoefx]]
-            AfdParx     <- coefListx$fun
+            AfdParx     <- modelListix$fun
             if (is.fdPar(AfdParx) || is.fd(AfdParx) || is.basis(AfdParx)) {
               Ufdx      <- modelListix$Ufd
               if (is.basis(AfdParx)) {
@@ -63,19 +59,15 @@ Atensorfn <- function(modelList, coefList) {
               nUbasisx  <- Ubasisx$nbasis
               if (Atypev == "const"   && Atypex == "const" &&
                   Utypev == "bspline" && Utypex == "bspline") {
-                #  of both coefficients have constant bases, use inprod.Data2LD
-                # print("Calling inprod.Data2LD")
                 XWXWmatij <- inprod(Ubasisv, Ubasisx, 0, 0)
                 XWXWmatij <- matrix(XWXWmatij, nUbasisv*nUbasisx, 1)
               } else {
-                # otherwise use inprod.TPbasis
-                # print("Calling inprod.TPbasis")
                 XWXWmatij <- inprod.TPbasis(Ubasisv, Abasisv,
                                             Ubasisx, Abasisx,
                                             0, 0, 0, 0)
               }
               #  as a single column sparse matrix
-              AtensorListi[[jx]][[jv]] <- Matrix(XWXWmatij)
+              AtensorListi[[jx]][[jv]] <- XWXWmatij
             }
           }
         }
@@ -83,9 +75,8 @@ Atensorfn <- function(modelList, coefList) {
       AtensorList[[ivar]] <- AtensorListi
     } else {
       #  there are no forcing terms for this variable
-      AtensorList[[ivar]] <- NULL
+      AtensorList[[ivar]] <- 0
     }
-
   }
 
   return(AtensorList)

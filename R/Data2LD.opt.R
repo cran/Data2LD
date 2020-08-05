@@ -1,12 +1,12 @@
-Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
+Data2LD.opt <- function(yList, XbasisList, modelList, rhoMat,
                         convcrit=1e-4, iterlim=20, dbglev=1, 
-                        active, parMap=diag(rep(1,npar))) {
+                        parMap=diag(rep(1,nparam))) {
 
   #  Data2LD.opt optimizes a parameter vector theta defining a
   #    linear differential operator object used to smooth a set of data.
   #
   #  Arguments:
-  #  YCELL     an array containing values of curves
+  #  YLIST     an array containing values of curves
   #               If the array is a matrix, rows must correspond to argument
   #               values and columns to replications, and it will be assumed
   #               that there is only one variable per observation.
@@ -15,19 +15,19 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
   #               and the third to variables within replications.
   #               If Y is a vector, only one replicate and variable are
   #               assumed.
-  #  BASISCELL  A functional data object or a BASIS object.  If so, the
+  #  BASISLIST  A functional data object or a BASIS object.  If so, the
   #               smoothing parameter LAMBDA is set to 0.
-  #  MODELCELL  A cell aray of length NVAR. Each cell contains a
+  #  MODELLIST  A list of length NVAR. Each list contains a
   #                struct object with members:
-  #                Xcell  cell array of length number of homogeneous terms
-  #                          Each cell contains a struct object with members:
+  #                XList  list of length number of homogeneous terms
+  #                          Each list contains a struct object with members:
   #                          WfdPar  a fdPar object for the coefficient
   #                          variable    the index of the variable
   #                          derivative  the order of its derivative
   #                          npar  if coefficient estimated, its location
   #                                   in the composite vector
-  #                Fcell  cell arrau of length number of forcing terms
-  #                          Each cell contains a struct object with members:
+  #                FList  list of length number of forcing terms
+  #                          Each list contains a struct object with members:
   #                          AfdPar  an fdPar object for the coefficient
   #                          Ufd     an fd object for the forcing function
   #                          npar  if coefficient estimated, its location
@@ -36,23 +36,6 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
   #                name       a  tag for the variable
   #                nallXterm  the number of homogeneous terms
   #                nallFterm  the number of forcing functions
-  #  COEFCELL  ... A cell array of length NCOEF.  Each cell contaions:
-  #                fdPar ... an fdPar object that defines a coefficient
-  #                          function \beta(t) or \alpha(t) that multiplies a
-  #                          variable derivative value or a forcing function,
-  #                          respectively, and also whether the coefficient
-  #                          is to be estimated or held fixed.  Note that
-  #                          a specified coefficient function may appear in
-  #                          more than one place in a system of differential
-  #                          equations, and can multiply either a variable
-  #                          derivative value or a forcing function
-  #                          simultaneously.  However, the same function
-  #                          cannot be fixed in place and estimated in
-  #                          another.
-  #                index ... a vector of integers inciding the position(s) in
-  #                          the composite parameter vector \theta
-  #                          occupied by the coefficients of the functional
-  #                          data object (fd object) in the fdPar field.
   #  RHOMAT      A matrix with the number of rows equal to the number of values of the 
   #               smoothing parameter per variable to be used, and number of columns
   #               equal to the number of variables.  
@@ -81,7 +64,7 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
   #               ACTIVE specifies the constrained parameters to be estimated.
   #  PARMAP    A rectangular matrix with number of rows equal to the
   #               number of parameters to be estimated as defined in
-  #               BWTCELL, and number of columns equal to the number of
+  #               BWTLIST, and number of columns equal to the number of
   #               parameters less the number of linear constraints on the
   #               estimated parameters.  The columns of PARMAP must be
   #               orthnormal so that t(PARMAP) %*% PARMAP is an identity matrix.
@@ -103,58 +86,78 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
 
   #  Returns:  A named list object with these fields:
   #  THETA.OPT    The optimal parameter values.
-  #  BWTCELL.OPT  The corresponding optimal coefficients for the
+  #  BWTLIST.OPT  The corresponding optimal coefficients for the
   #                  homogeneous terms in the differential equation
-  #  AWTCELL.OPT  The corresponding optimal coefficients for the
+  #  AWTLIST.OPT  The corresponding optimal coefficients for the
   #                  forcing terms in the differential equation
 
-  #  Last modified 22 January 2019
+  #  Last modified 23 April 2020
 
-  theta  <- modelList2Vec(modelList, coefList)
-  ntheta <- length(theta)
-  npar   <- length(theta)
-
+  #  ------------------------------------------------------------------------
+  #                     Check input parameters
+  #  ------------------------------------------------------------------------
+    
   nvar <- length(yList)
-
+  nparam <- 0
+  for (ivar in 1:nvar) {
+    modelListi <- modelList[[ivar]]
+    if (modelListi$nallXterm > 0) {
+      for (iw in 1:modelListi$nallXterm) {
+        modelListiw <- modelListi$XList[[iw]]
+        nparam <- nparam + length(modelListiw$index)
+      }
+    }
+    if (modelListi$nallFterm > 0) {
+      for (jforce in 1:modelListi$nallFterm) {
+        modelListj <- modelListi$FList[[jforce]]
+        nparam = nparam + length(modelListj$index)
+      }
+    }
+  }
+  
+  #  Get the vector of parameters
+  
+  theta <- modelList2Vec(modelList, nparam)
+  ntheta <- length(theta)
+  
   thetaCon <- t(parMap) %*% theta
 
   nparCon <- length(thetaCon)
-  climit <- matrix(c(-1000,1000),2,1) %*% matrix(1,1,nparCon)
+  climit  <- matrix(c(-1000,1000),2,1) %*% matrix(1,1,nparCon)
   active  <- 1:nparCon
 
   #  check rhoMat and get nopt
   
   if (!is.matrix(rhoMat)) {
-    rhoMat = matrix(rhoMat,1,length(rhoMat))
+    rhoMat = matrix(rhoMat,length(rhoMat),1)
   }
   rhodim <- dim(rhoMat)
-  if (rhodim[2] != nvar) {
-    stop(paste("The second dimension of RHOMAT is not equal to",
+  if (rhodim[1] != nvar) {
+    stop(paste("The first dimension of RHOMAT is not equal to",
                "the number of variables"))
   }
-  nopt   <- rhodim[1]
+  nopt   <- rhodim[2]
 
   #   Lists to contain results if more than a single set of rho's are involved
 
-  thetastore   <- matrix(0,nopt,npar)
+  thetastore   <- matrix(0,ntheta,nopt)
   dfstore      <- matrix(0,nopt,1)
   gcvstore     <- matrix(0,nopt,1)
-  coefList.opt <- vector("list", nopt)
 
-  coefList.opti <- coefList
-
+  modelList.optList <- vector("list", nopt)
+  modelListnew <- modelList
+  
   #  ------------------------------------------------------------------------
   #                  loop through rho vectors
   #  ------------------------------------------------------------------------
 
-  for (iopt in 1:nopt) {
+    for (iopt in 1:nopt) {
 
-    rhoVeci <- rhoMat[iopt,]
+    rhoVeci <- rhoMat[,iopt]
 
     #  compute initial criterion value, gradient and hessian
     
-    Data2LDList <- Data2LD(yList, XbasisList, modelList, coefList.opti, rhoVeci,
-                             summary=FALSE)
+    Data2LDList <- Data2LD(yList, XbasisList, modelListnew, rhoVeci)
     
     fvec    <- Data2LDList$MSE
     grad    <- Data2LDList$DpMSE
@@ -260,7 +263,7 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
           status <- c(iternum, fvecsum, norm)
           cat("\n")
         }
-        coefListnew <- coefList
+        modelListnew <- modelList
         break
       }
       #  first step set to trial
@@ -296,9 +299,9 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
         #  update parameter vector
         thetanewCon <- thetaCon + linemat[1,5]*deltac
         #  ---------  update function, gradient and hessian  -----------
-        thetanew    <- parMap %*% thetanewCon
-        coefListnew <- modelVec2List(thetanew, coefList)
-        Data2LDList <- Data2LD(yList, XbasisList, modelList, coefListnew,
+        thetanew     <- parMap %*% thetanewCon
+        modelListnew <- modelVec2List(modelList, thetanew)
+        Data2LDList  <- Data2LD(yList, XbasisList, modelListnew, 
                                   rhoVeci, summary=FALSE)
         fvecnew       <- Data2LDList$MSE
         gradnew       <- Data2LDList$DpMSE
@@ -412,23 +415,22 @@ Data2LD.opt <- function(yList, XbasisList, modelList, coefList, rhoMat,
 
     #  evaluate the solution at the final optimal value of theta
     
-    Data2LDList <- Data2LD(yList, XbasisList, modelList, coefListnew,
-                           rhoVeci, summary=TRUE)
-    
+    Data2LDList <- Data2LD(yList, XbasisList, modelListnew, rhoVeci, summary=TRUE)
     #  store the optimal values for this level of the \rho's the 
     #  storage objects
     
-    thetastore[iopt,]    <- theta
-    dfstore[iopt]        <- Data2LDList$df
-    gcvstore[iopt]       <- Data2LDList$gcv
-    coefList.opt[[iopt]] <- coefListnew
+    theta <- modelList2Vec(modelListnew, nparam)
+    thetastore[,iopt] <- theta
+    dfstore[iopt]     <- Data2LDList$df
+    gcvstore[iopt]    <- Data2LDList$gcv
+    modelList.optList[[iopt]] <- modelListnew
 
   }
 
   #  -------------------  end of rho loop  ------------------
 
   return(list(thetastore=thetastore, dfstore=dfstore, gcvstore=gcvstore,
-              coefList.opt=coefList.opt))
+              modelList.optList=modelList.optList))
 
 }
 
@@ -463,10 +465,6 @@ stepchkData2LD = function(stepval, cvec, deltac, limwrd, ind,
     index   = active[stepvali[active] < bot[active]-cvec[active] &
                        deltac[active] != 0]
     stepvalnew = min((bot[index]-cvec[index])/deltac[index])
-    # if (dbgwrd) {
-    #   Rprint(paste('Lower limit reached, old step, new step: ',
-    #                stepval, stepvalnew))
-    # }
     stepval = stepvalnew
     #  check whether lower limit has been reached twice in a row
     if (limwrd[1]) {
@@ -490,10 +488,6 @@ stepchkData2LD = function(stepval, cvec, deltac, limwrd, ind,
     index   = active[stepvali[active] > top[active]-cvec[active] &
                        deltac[active] != 0]
     stepvalnew = min((top[index]-cvec[index])/deltac[index])
-    # if (dbgwrd) {
-    #   Rprint(paste('Upper limit reached, old step, new step: ',
-    #               stepval, stepvalnew))
-    # }
     stepval = stepvalnew
     #  check whether upper limit has been reached twice in a row
     if (limwrd[2]) {

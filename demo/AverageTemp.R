@@ -1,110 +1,99 @@
-#  In this example, a coefficient is nonconstant and also
-#  a nonlinear function of its parameters.  The reaction speed
-#  with which average temperature in Montreal responds to
-#  solar forcing is required to be positive.
-#  set up five-day block averages with winter centering
-#  Here we use 73 five-day block averages as the data with the block
-#  centers as the time points in order to speed up computation
+###                 Data2LD analyses of weather data
+#  Montreal's average temperature, centered on January 1, is fit by
+#  a first order linear equation with a time-varying coefficient and
+#  forced by a constant and by a cosine function representing solar
+#  heating translated by 10 days:
+#         DT(t) <- - \beta(t) + \alpha_1 + \alpha_2 U(t)
+#  where U(t) <- -cos((2*pi/365)*(t+192)).
+#  Rate function \beta(t) is constrained to be positive by expressing it
+#  as the exponential of a B-spline function with seven basis functions.
+#  This illustrates the use of a user-defined pair of functions for 
+#  \beta and its derivative with respect to the coefficients.
+#  The user-defined functions are:
+#
+# function bval <- fun_explinear(t, bvec, Bbasisobj)
+# if isa_fdPar(Bbasisobj)
+#     Bbasisobj <- getbasis(Bbasisobj);
+# end
+# basismat <- eval_basis(t,Bbasisobj);
+# bval     <- exp(basismat*bvec);
+# end
+#
+# function Dbval <- fun_Dexplinear(t, bvec, Bbasisobj)
+# nbasis    <- length(bvec);
+# if isa_fdPar(Bbasisobj)
+#     Bbasisobj <- getbasis(Bbasisobj);
+# end
+# basismat  <- eval_basis(t, Bbasisobj);
+# bval      <- exp(basismat*bvec);
+# Dbval     <- basismat.*repmat(bval,1,nbasis);
+# end
 
-daytime73 <- seq(2.5,362.5,len=73)
-dayrange  <- c(0,365)
+daytime   <- seq(0.5,364.5,len=365)  #  time in days
+daytime   <- daytime*12/365  #  measure time in months
+dayrange  <- c(0,12)
 #  set up block averages for Canadian temperature data,
 #  available from the fda package
 tempav <- CanadianWeather$dailyAv[,,"Temperature.C"]
-tempav73 <- matrix(0,73,35)
-m2 <- 0
-for (  i in 1 : 73 ) {
-  m1 <- m2 + 1
-  m2 <- m2 + 5
-  tempavi <- apply(tempav[m1:m2,1:35],2,mean)
-  tempav73[i,] <- tempavi
-} 
 #  center the time of the year on winter
-winterind73  <- c( 37:73,1: 36)
-tempav73 <- tempav73[winterind73,]
+winterind  <- c(183:365,1:182)
+tempData   <- tempav[winterind,]
 #  select the data for Montreal
-station <- 12 
+station    <- 12 
+tempData12 <- matrix(tempData[,station],365,1)
 
 #  set up TempDataList
-TempDataList1 <- list(argvals=as.matrix(daytime73), y=as.matrix(tempav73[,station]))
+
+TempDataList1 <- list(argvals=as.matrix(daytime), y=as.matrix(tempData12))
 TempDataList  <- vector("list",1)
 TempDataList[[1]]    <- TempDataList1
 
-#  basis for 5-day block averages
-norder    <- 5
-daybreaks <- seq(0,365,5)
-nbreaks   <- length(daybreaks)
-nbasis    <- norder + nbreaks - 2
-daybasis  <- create.bspline.basis(dayrange, nbasis)
-XbasisList <- vector("list",1)
-XbasisList[[1]] <- daybasis
+#  set up fourier basis for representing the fit curve
 
-#  Define the two forcing functions:
-#  constant function Ufd for constant forcing
-Uconbasis <- create.constant.basis(dayrange)
-Uconfd    <- fd(1, Uconbasis)
-Uconvec   <- matrix(1,73,1)
-#  cosine function for solar radiation forcing
-uvec      <- -cos((2*pi/365)*(daytime73+10+182))
-Ucosbasis <- create.fourier.basis(dayrange, 3)
-Ucosfd    <- smooth.basis(daytime73, uvec, Ucosbasis)$fd
+nbasis <- 51
+daybasis <- create.fourier.basis(dayrange, nbasis)
 
-#  Define three basis functional objects for coefficients
-#  A fourier basis for defining the positive homogeneous 
-#  coefficient
-nWbasis   <- 7
-Wbasisobj <- create.fourier.basis(dayrange, nWbasis)
-#  constant forcing coefficient for constant forcing
-nAbasisC   <- 1
-AbasisobjC <- create.constant.basis(dayrange)
-#  fourier coefficint function for radiative forcing
-nAbasisF   <- 1
-AbasisobjF <- create.constant.basis(dayrange)
+TempBasisList <- vector("list",1)
+TempBasisList[[1]] <- daybasis
 
-#  Set up the list object for the positive coefficient for 
-#  the homogeneous term.  
-linfun <- list(fd=fun.explinear, Dfd=fun.Dexplinear, more=Wbasisobj)
+#  set up a constant basis 
 
-#  Define coefficient functions for one homogeneous term and
-#  two forcing functions:
-#  Define the homogeneous term coefficient
-TempCoefListW  <-list(fun=linfun, parvec=matrix(0,nWbasis,1), estimate=TRUE)
-#  Coefficient for constant forcing
-TempCoefListA1 <- make.Coef(fun=AbasisobjC, parvec=1, estimate=TRUE)
-#  Coeffcient for cosine forcing
-TempCoefListA2 <- make.Coef(fun=AbasisobjF, parvec=1, estimate=TRUE)
+Cbasis <- create.constant.basis(dayrange)
 
-#  TempCoefList constructed and checked
-TempCoefList <- vector("list",3)
-TempCoefList[[1]] <- TempCoefListW
-TempCoefList[[2]] <- TempCoefListA1
-TempCoefList[[3]] <- TempCoefListA2
-#  check the coefficient list
-coefResult <- coefCheck(TempCoefList)
-TempCoefList <- coefResult$coefList
-ntheta   <- coefResult$ntheta
-print(paste("ntheta = ",ntheta))
+#  List objects for each homogeneous term
 
-#  Define the variable for temperature
-#  define homogeneous term and list container
-Xterm <- make.Xterm(variable=1, derivative=0, ncoef=1, factor= -1)
+#  Model: no forcing, harmonic only, fourier coefficients
+
+nFbasis <- 3;
+Fbasis  <- create.fourier.basis(dayrange, nFbasis)
+
+Fparvec <- c(0.3, rep(1,nFbasis-1))
+# Fields:            funobj   parvec    estimate  variable deriv. factor
+Xterm1 <- make.Xterm(Fbasis,  Fparvec,  TRUE,     1,       1,     -1);
+
 XList <- vector("list", 1)
-XList[[1]] <- Xterm
-#  define two forcing terms
-Fterm1 <- make.Fterm(Ufd=Uconfd, ncoef=2, factor=1)
-Fterm2 <- make.Fterm(Ufd=Ucosfd, ncoef=3, factor=1)
-#  forcing term container
-FList <- vector("list", 2)
-FList[[1]] <- Fterm1
-FList[[2]] <- Fterm2
-#  set up variable list object
-TempVariableList1 <- make.Variable(name="temperature", order=1, XList=XList, FList=FList)
-# set up TempVariableList
-TempVariableList <- vector("list",1)
-TempVariableList[[1]] <- TempVariableList1
+XList[[1]] = Xterm1
 
-# define the model list object
-TempModelList <- make.Model(TempBasisList, TempVariableList, TempCoefList)
+#  struct objects for each forcing term
+
+FList <- NULL
+
+#  set up variable list object TempVariableList
+
+TempVariableList <- make.Variable(name="Temperature", order=3, XList=XList, FList=FList)
+
+# set up  model list object TempModelList
+
+TempModelList <- vector("list",1)
+TempModelList[[1]] <- TempVariableList
+
+# check the model list object
+
+TempModelcheck <- checkModel(TempBasisList, TempModelList)
+TempModelList  <- TempModelcheck$modelList
+nparam         <- TempModelcheck$nparam
+
+print(paste("Number of parameters =",nparam))
 
 # An evaluation of the criterion at the initial values
 
@@ -112,21 +101,19 @@ rhoVec <- 0.5
 
 #  This command causes Data2LD to set up and save the tensors
 
-Data2LDResult <- Data2LD(TempDataList, TempBasisList, TempModelList, TempCoefList, rhoVec)
+Data2LDResult <- Data2LD(TempDataList, TempBasisList, TempModelList, rhoVec)
 
 MSE        <- Data2LDResult$MSE        # Mean squared error for fit to data
 DpMSE      <- Data2LDResult$DpMSE      #  gradient with respect to parameter values
-D2ppMSE    <- Data2LDResult$D2ppMSE    #  Hessian matrix
-XfdParList <- Data2LDResult$XfdParList #  List of fdPar objects for variable values 
-df         <- Data2LDResult$df         #  Degrees of freedom for fit
-gcv        <- Data2LDResult$gcv        #  Generalized cross-validation coefficient
-ISE        <- Data2LDResult$ISE        #  Size of second term, integrated squared error
-Var.theta  <- Data2LDResult$Var.theta  #  Estimate sampling variance for parameters
+
+round(MSE,3)
+round(DpMSE,3)
 
 #  set constants for estimation algorithm Data2LD.opt
+
 dbglev  <-  1    
 iterlim <- 50    
-convrg  <- c(1e-5, 1e-4)  
+convrg  <- 1e-5  
 #  define rhovec using the logit function
 gammavec <- seq(0,7,1)
 rhoVec   <- exp(gammavec)/(1+exp(gammavec))
@@ -136,90 +123,85 @@ dfesave <- matrix(0,nrho,1)
 gcvsave <- matrix(0,nrho,1)
 MSEsave <- matrix(0,nrho,1)
 ISEsave <- matrix(0,nrho,1)
-thesave <- matrix(0,nrho,ntheta)
+thesave <- matrix(0,nrho,nparam)
 
 #  Initialize coefficient list
-TempCoefList.opt <- TempCoefList
+TempModelList.opt <- TempModelList
 #  Loop through rho values
 for (  irho  in  1 : nrho ) {
   rhoVeci <- rhoVec[irho]
-  print(paste('Rho = ',round(rhoVeci,5)))
-  OptList <- Data2LD.opt(TempDataList, TempBasisList, TempModelList, TempCoefList.opt, 
+  print(paste('Rho <- ',round(rhoVeci,5)))
+  OptList <- Data2LD.opt(TempDataList, TempBasisList, TempModelList.opt, 
                          rhoVeci, convrg, iterlim, dbglev)
   theta.opti <- OptList$thetastore
-  TempCoefList.opti <- modelVec2List(theta.opti, TempCoefList)    
-  Data2LDResult <- Data2LD(TempDataList, TempBasisList, TempModelList, TempCoefList.opt, rhoVeci)
+  TempModelList.opt <- modelVec2List(TempModelList, theta.opti)    
+  Data2LDResult <- Data2LD(TempDataList, TempBasisList, TempModelList.opt, rhoVeci)
   thesave[irho,] <- theta.opti
   dfesave[irho]  <- Data2LDResult$df
   gcvsave[irho]  <- Data2LDResult$gcv
   MSEsave[irho]  <- Data2LDResult$MSE
   ISEsave[irho]  <- Data2LDResult$ISE
-  TempCoefList.opt   <- TempCoefList.opti
 } 
 
 # display degrees of freedom and gcv values
 print('    rho      df         gcv')
-print(cbind(rhoVec, dfesave, gcvsave))
+print(round(cbind(rhoVec, dfesave, gcvsave),3))
 
 # Evaluate the fit for parameter values at highest rho value
-irho <- nrho
-theta <- thesave[irho,]
-TempCoefList <- modelVec2List(theta, TempCoefList)
+
+irho <- 8
+theta <- matrix(thesave[irho,],nparam,1)
+TempModelList.opt <- modelVec2List(TempModelList.opt, theta)
 rhoi <- rhoVec[irho]
-Data2LDList <- Data2LD(TempDataList, TempBasisList, TempModelList, TempCoefList.opti, rhoi)
+Data2LDList <- Data2LD(TempDataList, TempBasisList, TempModelList.opt, rhoi)
 MSE       <- Data2LDList$MSE 
 df        <- Data2LDList$df
 gcv       <- Data2LDList$gcv 
 ISE       <- Data2LDList$ISE 
 Var.theta <- Data2LDList$Var.theta
-print(paste("MSE = ", round(Data2LDResult$MSE,4)))
-print(paste("df  = ", round(Data2LDResult$df, 4)))
-print(paste("gcv = ", round(Data2LDResult$gcv,4)))
+print(paste("MSE <- ", round(Data2LDResult$MSE,4)))
+print(paste("df  <- ", round(Data2LDResult$df, 4)))
+print(paste("gcv <- ", round(Data2LDResult$gcv,4)))
 
 #  Set up functional data object and fine mesh for plotting variable
+
 XfdParList <- Data2LDList$XfdParList
 tempfdPar <- XfdParList[[1]]
 tempfd    <- tempfdPar$fd
-tfine     <- seq(0,365,len=101)
+tfine     <- seq(0,12,len=101)
 tempfine  <- eval.fd(tfine, tempfd)
 
 #  Plot the fit to the data
 par(mfrow=c(1,1),ask=FALSE)
-plot(tfine, tempfine, type="l", lwd=2, xlim=c(0,365), ylim=c(-15,25),
+plot(tfine, tempfine, type="l", lwd=2, xlim=c(0,12), ylim=c(-15,25),
      xlab="Time (days)", ylab="Temperature (deg C)")
-points(daytime73, tempav73[,station], pch="o") 
-lines(daytime73, uvec, lty=4)
+points(daytime, tempData12, pch="o") 
 
 # plot the optimal parameter values as functions of rho
-indW <- 1:nWbasis
-indA1 <- (nWbasis+1):(nWbasis + nAbasisC)
-indA2 <- (nWbasis+nAbasisC+1):ntheta
 #  plot flow of beta(t) parameters
-matplot(rhoVec, thesave[,indW], type="b", lwd=2, 
-        xlab="rho", ylab="log beta coefficients")
 
-#  plot flow of alpha 1 and alpha 2
-par(mfrow=c(2,1))
-plot(rhoVec, thesave[,indA1], type="b", ylab="alpha.1")
-plot(rhoVec, thesave[,indA2], type="b", xlab="rho", ylab="alpha.2")
+matplot(rhoVec, thesave, type="b", lwd=2, 
+        xlab="rho", ylab="beta coefficients")
 
 #  plot \beta with confidence intervals
-betafd     <- fd(thesave[irho,indW], Wbasisobj)
-betavec    <- exp(eval.fd(daytime73,betafd))
-Var.thetaW <- Var.theta[indW,indW]
-basismatW  <- (betavec %*% matrix(1,1,nWbasis)) * eval.basis(daytime73, Wbasisobj)
-CI.beta    <- 2*sqrt(diag(basismatW %*% Var.thetaW %*% t(basismatW)))
-betamat <- cbind(betavec,betavec  + CI.beta,betavec  - CI.beta)
-par(mfrow=c(1,1))
-matplot(daytime73, betamat , type="l", lty=c(1,4,4), col=1, lwd=2, 
-       xlab="Time (days)", ylab="beta", xlim=c(0,365), ylim=c(0,0.05))
 
- #  display 95# confidence limits for \alpha1 and \alpha2
-alpha1 <- thesave[irho,indA1]
-alpha2 <- thesave[irho,indA2]
-alpha1.stderr <- sqrt(Var.theta[indA1])
-alpha2.stderr <- sqrt(Var.theta[indA2])
-print('    alpha.1   lower CI upper CI')
-print(c(alpha1, alpha1-2*alpha1.stderr, alpha1+2*alpha1.stderr))
-print('    alpha.2   lower CI upper CI')
-print(c(alpha2, alpha2-2*alpha2.stderr, alpha2+2*alpha2.stderr))
+betafd   <- fd(theta, Fbasis)
+betavec  <- eval.fd(daytime,betafd)
+basismat <- (betavec %*% matrix(1,1,3)) * eval.basis(daytime, Fbasis)
+CI.beta  <- 2*sqrt(diag(basismat %*% Var.theta %*% t(basismat)))
+betamat  <- cbind(betavec, betavec+CI.beta, betavec-CI.beta)
+par(mfrow=c(1,1))
+matplot(daytime, betamat , type="l", lty=c(1,4,4), col=1, lwd=2, 
+       xlab="Time (days)", ylab="beta", xlim=c(0,12))
+
+#  plot fit to derivative, lower panel in Figure 12.10 in the book
+
+D1dayvec = eval.fd(daytime, tempfd, 1)
+D3dayvec = eval.fd(daytime, tempfd, 3)
+
+D3dayfit = -betavec * D1dayvec
+
+D3mat = cbind(D3dayfit,D3dayvec)
+matplot(daytime, D3mat, type="l", lty=c(1,4), col=1,
+     xlab="Time (days)", ylab="D3 Temperature", xlim=c(0,12))
+

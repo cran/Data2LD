@@ -14,18 +14,24 @@
   This function sets up a list object that specifies the structure of a single term.
 }
 \usage{
-make.Fterm(ncoef, Ufd, factor=1, name=NULL)
+make.Fterm(funobj, parvec, estimate, Ufd, factor=1)
 }
 \arguments{
-  \item{ncoef}{An integer specifying the position of the coefficient specification 
-  in a coefficient list.}
+  \item{funobj}{A specification of the coefficient function.  If \code{funobj}
+  is of class \code{basisobj}, \code{fd} or \code{fdPar}, the coefficient function
+  is a functional data object for a single function.  If the class is \code{list},
+  its members define a function, its derivative, and other information that may
+  be needed in the definition.}
+  \item{parvec}{The vector of parameters defining coefficient function.}
+  \item{estimate}{A vector of the same length as \code{parvec} containing
+  logical values defining which parameteres are to be estimated (TRUE) or kept
+  fixed (FALSE).  If all values are the same, a single TRUE or FALSE is sufficient.}
   \item{Ufd}{A known forcing function.  This may be specified as a functional data 
   or functional parameter object, but may also be specified as a user-defined function.  
   See function \code{make.coef} for more details.}
   \item{factor}{A real number that is treated as fixed. For example, it is frequently 
   the case that a variable will appear in two or more places in a system of equations, 
   and sometimes multipled by -1.}   
-  \item{name}{A name for the term, or for the forcing function itself.}
 }
 \details{
   This function checks that all supplied terms conform to what is required.
@@ -37,24 +43,39 @@ make.Fterm(ncoef, Ufd, factor=1, name=NULL)
     J. O. Ramsay and G. Hooker (2017) \emph{Dynamic Data Analysis}. Springer.
 }
 \seealso{
-  \code{\link{make.Coef}},
-  \code{\link{make.Model}}
+  \code{\link{checkModel}},
   \code{\link{make.Variable}},
   \code{\link{make.Xterm}},
+  \code{\link{printModel}}
 }
 \examples{
-#  For examples of the use of this function, 
-#  see these examples in the description of the function make.variable.
+#  Here is the code that sets up the single forcing term for the 
+#  refinery data examnple:
+TimeData <- RefineryData[,1]
+TrayData <- RefineryData[,2]
+ValvData <- RefineryData[,3]
+conbasis <- create.constant.basis(c(0,193))
+alphafdPar <- fdPar(conbasis)
+Valvbreaks <- c(0,67,193)
+Valvnbasis <- 2
+Valvnorder <- 1
+Valvbasis  <- create.bspline.basis(c(0,193), Valvnbasis, Valvnorder, Valvbreaks)
+Valvfd     <- smooth.basis(TimeData, ValvData, Valvbasis)$fd
+#  Fterm Fields:    funobj      parvec  estimate  Ufd      factor
+FTerm <- make.Fterm(alphafdPar, 1.0,    TRUE,     Valvfd,  1)
+FList <- vector("list", 1)
+FList[[1]] <- FTerm
 #
-#  Example 1:  The refinery data
+#  For other examples of the use of this function, 
+#  see these examples in the description of the function \code{make.Variable}.
 #
+#  The single forcing term of the head impact data
 #
-#  Example 2:  The X coordinate of the fda script data
+#  The cosine and constant forcing terms for the average temperature in
+#  Montreal.
 #
+#  The 20-step forcing function and its coefficient for the "fda" script data.
 #
-#  Example 3:  The X coordinate of the fda script data
-#
-#
-#  Example 4  Average temperature for Montreal
+#  The set point forcing term for control variable of the cruise control data.
 #
 }

@@ -1,7 +1,5 @@
-export(coefCheck)
 export(make.Fterm)
-export(make.Coef)
-export(make.Model)
+export(checkModel)
 export(make.Variable)
 export(make.Xterm)
 export(Data2LD)
@@ -13,16 +11,14 @@ export(modelVec2List)
 export(Btensorfn)
 export(BAtensorfn)
 export(Atensorfn)
-export(getHomoTerm)
-export(getForceTerm)
 
 import(fda)
-import(Matrix)
 import(splines)
 import(deSolve)
+import(knitr)
+import(rmarkdown)
 importFrom("graphics", "lines", "plot")
-
-useDynLib(Data2LD)
+useDynLib(Data2LD, .registration=TRUE)
 
 
 
